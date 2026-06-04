@@ -18,11 +18,7 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 }
 
-func runInit(_ *cobra.Command, _ []string) error {
-	if _, err := os.Stat(".invincible.toml"); err == nil {
-		return fmt.Errorf(".invincible.toml already exists in the current directory")
-	}
-	fmt.Print(`[project]
+const initTemplate = `[project]
 name = "myapp"
 # api_addr = ":7777"  # override the Invincible API port
 
@@ -42,6 +38,15 @@ name = "worker"
 cmd = "go run ./cmd/worker"
 # port omitted → Invincible assigns an arbitrary free port
 # no_port = true          # uncomment to disable port assignment entirely
-`)
+`
+
+func runInit(_ *cobra.Command, _ []string) error {
+	if _, err := os.Stat(".invincible.toml"); err == nil {
+		return fmt.Errorf(".invincible.toml already exists in the current directory")
+	}
+	if err := os.WriteFile(".invincible.toml", []byte(initTemplate), 0644); err != nil {
+		return fmt.Errorf("Error creating .invincible.toml: %w", err)
+	}
+	fmt.Println("created .invincible.toml")
 	return nil
 }
