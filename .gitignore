@@ -5,6 +5,7 @@
 # Go build cache
 *.test
 *.out
+coverage.html
 
 # macOS
 .DS_Store

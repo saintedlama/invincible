@@ -5,7 +5,7 @@ else
     BIN := invincible
 endif
 
-.PHONY: build test vet lint clean run
+.PHONY: build test vet lint clean run cover
 
 build:
 	go build -o $(BIN) $(CMD)
@@ -15,6 +15,11 @@ test:
 
 test-verbose:
 	go test -v ./...
+
+cover:
+	go test -coverprofile=coverage.out -covermode=atomic ./...
+	go tool cover -func coverage.out
+	go tool cover -html=coverage.out -o coverage.html
 
 vet:
 	go vet ./...

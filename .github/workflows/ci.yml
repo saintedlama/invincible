@@ -39,4 +39,19 @@ jobs:
         run: make build
 
       - name: Test
-        run: make test-verbose
+        run: make cover
+
+      - name: Coverage summary
+        run: |
+          echo '## Coverage' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          go tool cover -func coverage.out | tee -a $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          pct=$(go tool cover -func coverage.out | tail -1 | awk '{print $3}')
+          echo "**Total: $pct**" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage
+          path: coverage.html
