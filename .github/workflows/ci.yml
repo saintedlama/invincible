@@ -67,6 +67,6 @@ jobs:
             sed 's|github\.com/saintedlama/invincible/||' | \
             awk '
               BEGIN { print "## Coverage\n\n| Package | Coverage |\n|---------|----------|" }
-              /^total:/ { printf "| **%s** | **%s** |\n", $$1, $$NF; next }
-              { printf "| %s | %s |\n", $$1, $$NF }
+              /^total:/ { printf "| **%s** | **%s** |\n", $1, $NF; next }
+              { printf "| %s | %s |\n", $1, $NF }
             ' >> $GITHUB_STEP_SUMMARY
