@@ -79,4 +79,3 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	sup.StopAll()
 	return nil
 }
-

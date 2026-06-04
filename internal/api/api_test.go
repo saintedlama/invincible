@@ -20,10 +20,10 @@ type mockSup struct {
 	restarted []string
 }
 
-func (m *mockSup) Start(name string) error   { m.started = append(m.started, name); return nil }
-func (m *mockSup) Stop(name string) error    { m.stopped = append(m.stopped, name); return nil }
-func (m *mockSup) Restart(name string) error { m.restarted = append(m.restarted, name); return nil }
-func (m *mockSup) RestartAll()               { m.restarted = append(m.restarted, "*") }
+func (m *mockSup) Start(name string) error            { m.started = append(m.started, name); return nil }
+func (m *mockSup) Stop(name string) error             { m.stopped = append(m.stopped, name); return nil }
+func (m *mockSup) Restart(name string) error          { m.restarted = append(m.restarted, name); return nil }
+func (m *mockSup) RestartAll()                        { m.restarted = append(m.restarted, "*") }
 func (m *mockSup) Status() []supervisor.ProcessStatus { return m.statuses }
 func (m *mockSup) Logs(name string, n int) []supervisor.LogEntry {
 	entries := m.logs[name]

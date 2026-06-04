@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	tea "charm.land/bubbletea/v2"
 	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/saintedlama/invincible/internal/supervisor"
 )
@@ -22,18 +22,18 @@ type supervisorIface interface {
 }
 
 var (
-	styleRunning  = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	styleStopped  = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	styleCrashed  = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	styleStarting = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	styleSelected = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
-	styleHelp     = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	styleScrolled = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	styleStderr    = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	styleRunning    = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	styleStopped    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	styleCrashed    = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	styleStarting   = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	styleSelected   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
+	styleHelp       = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	styleScrolled   = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	styleStderr     = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 	styleInvincible = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	styleAPI        = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	styleLabel    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	panelStyle    = lipgloss.NewStyle().
+	styleLabel      = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	panelStyle      = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("8"))
 	detailPanelStyle = panelStyle.Padding(0, 1, 1, 1)

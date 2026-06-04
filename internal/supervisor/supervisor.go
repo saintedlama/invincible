@@ -373,16 +373,16 @@ func (s *Supervisor) Status() []ProcessStatus {
 		p := s.processes[name]
 		p.mu.Lock()
 		out = append(out, ProcessStatus{
-				Name:      p.cfg.Name,
-				State:     p.state.String(),
-				PID:       p.pid,
-				Cmd:       p.cfg.Cmd,
-				Port:      p.assignedPort,
-				Env:       p.cfg.Env,
-				DependsOn: p.cfg.DependsOn,
-				Restarts:  p.restarts,
-				StartedAt: p.startedAt,
-			})
+			Name:      p.cfg.Name,
+			State:     p.state.String(),
+			PID:       p.pid,
+			Cmd:       p.cfg.Cmd,
+			Port:      p.assignedPort,
+			Env:       p.cfg.Env,
+			DependsOn: p.cfg.DependsOn,
+			Restarts:  p.restarts,
+			StartedAt: p.startedAt,
+		})
 		p.mu.Unlock()
 	}
 	return out
@@ -472,7 +472,7 @@ func (s *Supervisor) restartDependents(changedName string, newPort int) {
 			s.mu.RUnlock()
 			if dp != nil {
 				s.stopProcess(dp, fmt.Sprintf("dependency %s port changed", changedName)) //nolint
-				s.startProcess(dp)                                                          //nolint
+				s.startProcess(dp)                                                        //nolint
 			}
 		}(name)
 	}
