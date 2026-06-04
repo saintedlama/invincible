@@ -65,6 +65,7 @@ jobs:
         run: |
           go tool cover -func coverage.out | awk '
             BEGIN { print "## Coverage\n\n| Package | Coverage |\n|---------|----------|" }
+            { gsub(/^github\.com\/saintedlama\/invincible\//, "") }
             /^total:/ { printf "| **%s** | **%s** |\n", $$1, $$NF; next }
             { printf "| %s | %s |\n", $$1, $$NF }
           ' >> $GITHUB_STEP_SUMMARY
