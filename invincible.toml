@@ -1,0 +1,22 @@
+[project]
+name = "demo"
+
+# Worker: standalone service, no dependencies.
+[[process]]
+name = "worker"
+cmd = "sh -c 'echo \"Listening on port $PORT\"' && python -m http.server $PORT"
+port = 9000
+
+# API: depends on worker. Prints WORKER_PORT on startup, then serves.
+[[process]]
+name = "api"
+cmd = "sh -c 'echo \"Listening on port $PORT, using worker port $WORKER_PORT\" && python -m http.server $PORT'"
+port = 8080
+depends_on = ["worker"]
+
+# Frontend: depends on api. Prints API_PORT on startup, then serves.
+[[process]]
+name = "frontend"
+cmd = "sh -c 'echo \"Listening on port $PORT, using api port $API_PORT\" && python -m http.server $PORT'"
+port = 3000
+depends_on = ["api"]

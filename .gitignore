@@ -1,0 +1,19 @@
+# binary
+/invincible
+/invincible.exe
+
+# Go build cache
+*.test
+*.out
+
+# macOS
+.DS_Store
+
+# editor
+.vscode/
+.idea/
+*.swp
+
+# agent stuff
+.claude/
+tmp/
