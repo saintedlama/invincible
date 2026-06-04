@@ -22,7 +22,7 @@ func init() {
 func runSkill(_ *cobra.Command, _ []string) error {
 	cfg, err := config.Load(cfgFile)
 	if err != nil {
-		return fmt.Errorf("no invincible.toml found in the current directory — run `invincible init` to create one")
+		return fmt.Errorf("no .invincible.toml found in the current directory — run `invincible init` to create one")
 	}
 
 	fmt.Print("Paste the text below into your agent prompt to have the agent install an Invincible skill for this project.\n\n")

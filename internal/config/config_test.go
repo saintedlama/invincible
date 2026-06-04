@@ -8,7 +8,7 @@ import (
 
 func writeToml(t *testing.T, content string) string {
 	t.Helper()
-	p := filepath.Join(t.TempDir(), "invincible.toml")
+	p := filepath.Join(t.TempDir(), ".invincible.toml")
 	if err := os.WriteFile(p, []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ name = "api"
 }
 
 func TestLoad_FileNotFound(t *testing.T) {
-	_, err := Load("/nonexistent/invincible.toml")
+	_, err := Load("/nonexistent/.invincible.toml")
 	if err == nil {
 		t.Fatal("expected error for missing file")
 	}

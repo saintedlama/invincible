@@ -30,7 +30,7 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "invincible.toml", "path to config file")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", ".invincible.toml", "path to config file")
 	rootCmd.Flags().String("api-addr", "", "preferred API address (e.g. :7778); falls back to config api_addr, then :7777")
 	rootCmd.Flags().Bool("no-tui", false, "run headless (no terminal UI)")
 }

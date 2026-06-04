@@ -9,7 +9,7 @@ import (
 
 var initCmd = &cobra.Command{
 	Use:          "init",
-	Short:        "Create a starter invincible.toml in the current directory",
+	Short:        "Create a starter .invincible.toml in the current directory",
 	SilenceUsage: true,
 	RunE:         runInit,
 }
@@ -19,8 +19,8 @@ func init() {
 }
 
 func runInit(_ *cobra.Command, _ []string) error {
-	if _, err := os.Stat("invincible.toml"); err == nil {
-		return fmt.Errorf("invincible.toml already exists in the current directory")
+	if _, err := os.Stat(".invincible.toml"); err == nil {
+		return fmt.Errorf(".invincible.toml already exists in the current directory")
 	}
 	fmt.Print(`[project]
 name = "myapp"

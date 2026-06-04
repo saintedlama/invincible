@@ -34,7 +34,7 @@ type Config struct {
 
 func Load(path string) (*Config, error) {
 	if path == "" {
-		path = filepath.Join(".", "invincible.toml")
+		path = filepath.Join(".", ".invincible.toml")
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
