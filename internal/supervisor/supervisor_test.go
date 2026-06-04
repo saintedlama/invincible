@@ -306,6 +306,47 @@ func TestSupervisor_StartIdempotent(t *testing.T) {
 	}
 }
 
+func TestSupervisor_StartAll_DependencyOrder(t *testing.T) {
+	requireSh(t)
+
+	// worker ← api ← frontend; chain with NoPort so all go to running immediately.
+	sup := New([]config.ProcessConfig{
+		{Name: "frontend", Cmd: "sleep 60", NoPort: true, PortEnv: "PORT", DependsOn: []string{"api"}},
+		{Name: "api", Cmd: "sleep 60", NoPort: true, PortEnv: "PORT", DependsOn: []string{"worker"}},
+		{Name: "worker", Cmd: "sleep 60", NoPort: true, PortEnv: "PORT"},
+	})
+	t.Cleanup(sup.StopAll)
+
+	sup.StartAll()
+	time.Sleep(200 * time.Millisecond)
+
+	for _, s := range sup.Status() {
+		if s.State != "running" {
+			t.Errorf("%s: got %q, want running", s.Name, s.State)
+		}
+	}
+}
+
+func TestSupervisor_waitForRunning_Timeout(t *testing.T) {
+	requireSh(t)
+
+	sup := New([]config.ProcessConfig{
+		{Name: "proc", Cmd: "sleep 60", PortEnv: "PORT"},
+	})
+	t.Cleanup(sup.StopAll)
+
+	// Assign a port but never bind it — probing never completes.
+	if err := sup.AssignPorts(); err != nil {
+		t.Fatal(err)
+	}
+	sup.StartAll()
+	time.Sleep(100 * time.Millisecond)
+
+	if sup.waitForRunning("proc", 100*time.Millisecond) {
+		t.Error("expected timeout (port never bound)")
+	}
+}
+
 func TestSupervisor_LifecycleEvents(t *testing.T) {
 	requireSh(t)
 	sup := New([]config.ProcessConfig{

@@ -306,14 +306,32 @@ func (s *Supervisor) Restart(name string) error {
 	return s.startProcess(p)
 }
 
-// RestartAll restarts every process in dependency order (dependencies first).
+// RestartAll restarts every process in dependency order, waiting for each
+// dependency to become running before restarting its dependents.
 func (s *Supervisor) RestartAll() {
 	s.mu.RLock()
 	ordered := s.topoOrder()
 	s.mu.RUnlock()
 
+	ready := make(map[string]bool, len(ordered))
+
 	for _, name := range ordered {
+		s.mu.RLock()
+		p := s.processes[name]
+		s.mu.RUnlock()
+
+		for _, dep := range p.cfg.DependsOn {
+			if !ready[dep] {
+				s.logEvent(p, fmt.Sprintf("dependency %s not ready, skipping", dep))
+				goto skip
+			}
+		}
+
 		s.Restart(name) //nolint
+		if s.waitForRunning(name, 30*time.Second) {
+			ready[name] = true
+		}
+	skip:
 	}
 }
 
@@ -341,15 +359,59 @@ func (s *Supervisor) topoOrder() []string {
 	return result
 }
 
-func (s *Supervisor) StartAll() {
-	s.mu.RLock()
-	order := s.order
-	s.mu.RUnlock()
-	for _, name := range order {
+// waitForRunning polls until the named process reaches StateRunning or the
+// timeout expires. Returns true if running, false on timeout or crash.
+func (s *Supervisor) waitForRunning(name string, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for {
 		s.mu.RLock()
 		p := s.processes[name]
 		s.mu.RUnlock()
+		if p == nil {
+			return false
+		}
+		p.mu.Lock()
+		state := p.state
+		p.mu.Unlock()
+		if state == StateRunning {
+			return true
+		}
+		if state == StateCrashed || state == StateStopped {
+			return false
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+func (s *Supervisor) StartAll() {
+	s.mu.RLock()
+	ordered := s.topoOrder()
+	s.mu.RUnlock()
+
+	started := make(map[string]bool, len(ordered))
+
+	for _, name := range ordered {
+		s.mu.RLock()
+		p := s.processes[name]
+		s.mu.RUnlock()
+
+		for _, dep := range p.cfg.DependsOn {
+			if !started[dep] {
+				s.logEvent(p, fmt.Sprintf("dependency %s not started, skipping", dep))
+				goto skip
+			}
+			if !s.waitForRunning(dep, 30*time.Second) {
+				s.logEvent(p, fmt.Sprintf("dependency %s not ready, skipping", dep))
+				goto skip
+			}
+		}
+
 		s.startProcess(p) //nolint
+		started[name] = true
+	skip:
 	}
 }
 
