@@ -10,6 +10,7 @@ import (
 )
 
 const DefaultRestartDelay = 500 * time.Millisecond
+const DefaultShutdownTimeout = 5 * time.Second
 
 type Project struct {
 	Name    string `toml:"name"`
@@ -24,7 +25,8 @@ type ProcessConfig struct {
 	NoPort       bool              `toml:"no_port"`
 	DependsOn    []string          `toml:"depends_on"`
 	Env          map[string]string `toml:"env"`
-	RestartDelay string            `toml:"restart_delay"`
+	RestartDelay    string `toml:"restart_delay"`
+	ShutdownTimeout string `toml:"shutdown_timeout"`
 }
 
 type Config struct {
@@ -58,6 +60,11 @@ func Load(path string) (*Config, error) {
 			cfg.Processes[i].RestartDelay = DefaultRestartDelay.String()
 		} else if _, err := time.ParseDuration(p.RestartDelay); err != nil {
 			return nil, fmt.Errorf("process %q invalid restart_delay %q: %w", p.Name, p.RestartDelay, err)
+		}
+		if p.ShutdownTimeout == "" {
+			cfg.Processes[i].ShutdownTimeout = DefaultShutdownTimeout.String()
+		} else if _, err := time.ParseDuration(p.ShutdownTimeout); err != nil {
+			return nil, fmt.Errorf("process %q invalid shutdown_timeout %q: %w", p.Name, p.ShutdownTimeout, err)
 		}
 	}
 	if err := checkDependencies(cfg.Processes); err != nil {
@@ -118,8 +125,14 @@ func checkDependencies(processes []ProcessConfig) error {
 	return nil
 }
 
-// RestartDelay parses and returns the process restart delay.
+// RestartDelayDuration parses and returns the process restart delay.
 func (p ProcessConfig) RestartDelayDuration() time.Duration {
 	d, _ := time.ParseDuration(p.RestartDelay) // already validated by Load
+	return d
+}
+
+// ShutdownTimeoutDuration parses and returns the graceful shutdown timeout.
+func (p ProcessConfig) ShutdownTimeoutDuration() time.Duration {
+	d, _ := time.ParseDuration(p.ShutdownTimeout) // already validated by Load
 	return d
 }

@@ -177,6 +177,50 @@ restart_delay = "not-a-duration"
 	}
 }
 
+func TestLoad_ShutdownTimeout_Default(t *testing.T) {
+	path := writeToml(t, `
+[[process]]
+name = "api"
+cmd = "echo"
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Processes[0].ShutdownTimeoutDuration() != DefaultShutdownTimeout {
+		t.Errorf("default shutdown_timeout: got %v, want %v", cfg.Processes[0].ShutdownTimeoutDuration(), DefaultShutdownTimeout)
+	}
+}
+
+func TestLoad_ShutdownTimeout_Custom(t *testing.T) {
+	path := writeToml(t, `
+[[process]]
+name = "api"
+cmd = "echo"
+shutdown_timeout = "10s"
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Processes[0].ShutdownTimeoutDuration().String() != "10s" {
+		t.Errorf("shutdown_timeout: got %v", cfg.Processes[0].ShutdownTimeoutDuration())
+	}
+}
+
+func TestLoad_ShutdownTimeout_Invalid(t *testing.T) {
+	path := writeToml(t, `
+[[process]]
+name = "api"
+cmd = "echo"
+shutdown_timeout = "not-a-duration"
+`)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for invalid shutdown_timeout")
+	}
+}
+
 func TestLoad_InvalidTOML(t *testing.T) {
 	path := writeToml(t, `this is not valid toml ===`)
 	_, err := Load(path)

@@ -10,9 +10,16 @@ import (
 func setProcessGroupAttr(cmd *exec.Cmd) {
 }
 
+func termProcessGroup(cmd *exec.Cmd) {
+	if cmd.Process == nil {
+		return
+	}
+	exec.Command("taskkill", "/T", "/PID", fmt.Sprintf("%d", cmd.Process.Pid)).Run() //nolint
+}
+
 func killProcessGroup(cmd *exec.Cmd) {
 	if cmd.Process == nil {
 		return
 	}
-	exec.Command("taskkill", "/F", "/T", "/PID", fmt.Sprintf("%d", cmd.Process.Pid)).Run()
+	exec.Command("taskkill", "/F", "/T", "/PID", fmt.Sprintf("%d", cmd.Process.Pid)).Run() //nolint
 }

@@ -2,7 +2,6 @@ package supervisor
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"io"
 	"net"
@@ -265,19 +264,22 @@ func (s *Supervisor) stopProcess(p *process, reason string) error {
 	}
 	s.logEvent(p, "stopping...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
 	done := make(chan struct{})
 	go func() {
 		cmd.Wait() //nolint
 		close(done)
 	}()
 
-	killProcessGroup(cmd)
+	termProcessGroup(cmd)
 	select {
 	case <-done:
-	case <-ctx.Done():
+	case <-time.After(p.cfg.ShutdownTimeoutDuration()):
+		s.logEvent(p, "shutdown timeout, killing")
+		killProcessGroup(cmd)
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+		}
 	}
 
 	p.mu.Lock()

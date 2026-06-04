@@ -30,8 +30,9 @@ name = "myapp"
 name = "api"
 cmd = "go run ./cmd/api"
 port = 8080
-# port_env = "PORT"       # env var name for this process's own port (default: PORT)
-# restart_delay = "500ms" # wait before restarting a crashed process
+# port_env = "PORT"          # env var name for this process's own port (default: PORT)
+# restart_delay = "500ms"    # wait before restarting a crashed process
+# shutdown_timeout = "5s"    # SIGTERM grace period before SIGKILL (default: 5s)
 
 [[process]]
 name = "worker"
