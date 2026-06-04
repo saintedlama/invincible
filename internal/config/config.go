@@ -18,15 +18,15 @@ type Project struct {
 }
 
 type ProcessConfig struct {
-	Name         string            `toml:"name"`
-	Cmd          string            `toml:"cmd"`
-	Port         int               `toml:"port"`
-	PortEnv      string            `toml:"port_env"`
-	NoPort       bool              `toml:"no_port"`
-	DependsOn    []string          `toml:"depends_on"`
-	Env          map[string]string `toml:"env"`
-	RestartDelay    string `toml:"restart_delay"`
-	ShutdownTimeout string `toml:"shutdown_timeout"`
+	Name            string            `toml:"name"`
+	Cmd             string            `toml:"cmd"`
+	Port            int               `toml:"port"`
+	PortEnv         string            `toml:"port_env"`
+	NoPort          bool              `toml:"no_port"`
+	DependsOn       []string          `toml:"depends_on"`
+	Env             map[string]string `toml:"env"`
+	RestartDelay    string            `toml:"restart_delay"`
+	ShutdownTimeout string            `toml:"shutdown_timeout"`
 }
 
 type Config struct {
