@@ -1,4 +1,6 @@
-CMD := ./cmd/invincible
+CMD     := ./cmd/invincible
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION)"
 ifeq ($(OS),Windows_NT)
     BIN := invincible.exe
 else
@@ -8,7 +10,7 @@ endif
 .PHONY: build test vet lint clean run cover
 
 build:
-	go build -o $(BIN) $(CMD)
+	go build $(LDFLAGS) -o $(BIN) $(CMD)
 
 test:
 	go test ./...

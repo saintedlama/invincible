@@ -15,6 +15,9 @@ coverage.html
 .idea/
 *.swp
 
+# goreleaser
+dist/
+
 # agent stuff
 .claude/
 tmp/
