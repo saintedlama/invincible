@@ -51,10 +51,6 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	}
 
 	sup := supervisor.New(cfg.Processes)
-	if err := sup.AssignPorts(); err != nil {
-		return err
-	}
-	sup.StartAll()
 
 	srv, err := api.New(sup, addr)
 	if err != nil {
@@ -65,6 +61,8 @@ func runRoot(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(os.Stderr, "api: %v\n", err)
 		}
 	}()
+
+	go sup.StartAll()
 
 	noTUI, _ := cmd.Flags().GetBool("no-tui")
 	if noTUI {

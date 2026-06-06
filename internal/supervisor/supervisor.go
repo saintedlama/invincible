@@ -41,19 +41,18 @@ func (s State) String() string {
 
 type process struct {
 	cfg          config.ProcessConfig
-	extraEnv     []string // injected by port manager
-	assignedPort int      // resolved free port (set before start via SetPort)
+	assignedPort int // resolved free port
 
 	mu          sync.Mutex
 	state       State
 	pid         int
 	cmd         *exec.Cmd
 	done        chan struct{} // closed by watch() after cmd.Wait() returns
+	running     chan struct{} // closed when process reaches StateRunning
 	logs        ringBuffer
-	stopOnce    sync.Once
 	intentional bool
-	restarts    int       // number of crash-triggered restarts
-	startedAt   time.Time // time of most recent successful start
+	restarts    int
+	startedAt   time.Time
 }
 
 type ProcessStatus struct {
@@ -69,98 +68,31 @@ type ProcessStatus struct {
 }
 
 type Supervisor struct {
-	mu        sync.RWMutex
-	processes map[string]*process
-	order     []string // insertion order from config
+	mu         sync.RWMutex
+	processes  map[string]*process
+	order      []string            // insertion order from config, used for display
+	dependents map[string][]string // reversed graph: name → processes that depend on it
 }
 
 func New(cfgs []config.ProcessConfig) *Supervisor {
 	s := &Supervisor{
-		processes: make(map[string]*process),
-		order:     make([]string, 0, len(cfgs)),
+		processes:  make(map[string]*process),
+		order:      make([]string, 0, len(cfgs)),
+		dependents: make(map[string][]string, len(cfgs)),
 	}
 	for _, c := range cfgs {
 		s.processes[c.Name] = &process{cfg: c}
 		s.order = append(s.order, c.Name)
+		if _, ok := s.dependents[c.Name]; !ok {
+			s.dependents[c.Name] = nil
+		}
+	}
+	for _, c := range cfgs {
+		for _, dep := range c.DependsOn {
+			s.dependents[dep] = append(s.dependents[dep], c.Name)
+		}
 	}
 	return s
-}
-
-// AssignPorts finds a free port for every process that needs one, then injects
-// PORT= and peer {NAME}_PORT= vars into each process environment. Must be called
-// before StartAll.
-func (s *Supervisor) AssignPorts() error {
-	s.mu.RLock()
-	order := s.order
-	s.mu.RUnlock()
-
-	// First pass: resolve a free port for every process.
-	assigned := make(map[string]int, len(order))
-	for _, name := range order {
-		s.mu.RLock()
-		p := s.processes[name]
-		s.mu.RUnlock()
-		if p.cfg.NoPort {
-			continue
-		}
-		port, err := ports.FindFree(p.cfg.Port)
-		if err != nil {
-			return fmt.Errorf("process %q: %w", p.cfg.Name, err)
-		}
-		p.mu.Lock()
-		p.assignedPort = port
-		p.mu.Unlock()
-		assigned[name] = port
-	}
-
-	// Second pass: build env with own port + all peer ports.
-	for _, name := range order {
-		s.mu.RLock()
-		p := s.processes[name]
-		s.mu.RUnlock()
-		var env []string
-		if port, ok := assigned[name]; ok {
-			env = append(env, fmt.Sprintf("%s=%d", p.cfg.PortEnv, port))
-		}
-		for _, other := range order {
-			if otherPort, ok := assigned[other]; ok {
-				env = append(env, fmt.Sprintf("%s_PORT=%d", strings.ToUpper(other), otherPort))
-			}
-		}
-		if len(env) > 0 {
-			p.mu.Lock()
-			p.extraEnv = env
-			p.mu.Unlock()
-		}
-	}
-	return nil
-}
-
-// SetEnv adds extra environment variables for a named process (e.g. PORT=).
-func (s *Supervisor) SetEnv(name string, env []string) {
-	s.mu.RLock()
-	p := s.processes[name]
-	s.mu.RUnlock()
-	if p == nil {
-		return
-	}
-	p.mu.Lock()
-	p.extraEnv = env
-	p.mu.Unlock()
-}
-
-// SetPort records the resolved port for a named process so startProcess can
-// probe it before declaring the process running.
-func (s *Supervisor) SetPort(name string, port int) {
-	s.mu.RLock()
-	p := s.processes[name]
-	s.mu.RUnlock()
-	if p == nil {
-		return
-	}
-	p.mu.Lock()
-	p.assignedPort = port
-	p.mu.Unlock()
 }
 
 func (s *Supervisor) Start(name string) error {
@@ -180,31 +112,50 @@ func (s *Supervisor) startProcess(p *process) error {
 		return nil
 	}
 	p.intentional = false
-	p.stopOnce = sync.Once{}
 	p.state = StateStarting
 	s.logEvent(p, "starting...")
 
-	// Ensure the assigned port is still free; re-find if stolen since last assignment.
-	if p.assignedPort > 0 {
-		if !ports.IsFree(p.assignedPort) {
-			newPort, err := ports.FindFree(p.cfg.Port)
+	// Find or re-verify port.
+	if !p.cfg.NoPort {
+		if p.assignedPort == 0 || !ports.IsFree(p.assignedPort) {
+			port, err := ports.FindFree(p.cfg.Port)
 			if err != nil {
 				p.state = StateCrashed
 				return fmt.Errorf("process %q: %w", p.cfg.Name, err)
 			}
-			p.assignedPort = newPort
-			p.rebuildPortEnv(newPort)
+			p.assignedPort = port
 		}
 	}
 
 	cmd := exec.Command("sh", "-c", p.cfg.Cmd)
 	setProcessGroupAttr(cmd)
-	// Build env: inherit + config env + extra (port)
+
+	// Build env: parent + config env + own port + dependency ports.
 	env := envFromParent()
 	for k, v := range p.cfg.Env {
 		env = append(env, k+"="+v)
 	}
-	env = append(env, p.extraEnv...)
+	if !p.cfg.NoPort && p.assignedPort > 0 {
+		env = append(env, fmt.Sprintf("%s=%d", p.cfg.PortEnv, p.assignedPort))
+	}
+
+	// Collect dep process pointers while holding s.mu briefly.
+	s.mu.RLock()
+	depProcs := make([]*process, len(p.cfg.DependsOn))
+	for i, depName := range p.cfg.DependsOn {
+		depProcs[i] = s.processes[depName]
+	}
+	s.mu.RUnlock()
+
+	for i, dep := range depProcs {
+		dep.mu.Lock()
+		depPort := dep.assignedPort
+		dep.mu.Unlock()
+		if depPort > 0 {
+			env = append(env, fmt.Sprintf("%s_PORT=%d", strings.ToUpper(p.cfg.DependsOn[i]), depPort))
+		}
+	}
+
 	cmd.Env = env
 
 	stdout, err := cmd.StdoutPipe()
@@ -221,10 +172,12 @@ func (s *Supervisor) startProcess(p *process) error {
 		p.state = StateCrashed
 		return err
 	}
+
 	p.cmd = cmd
 	p.pid = cmd.Process.Pid
 	p.startedAt = time.Now()
 	p.done = make(chan struct{})
+	p.running = make(chan struct{})
 	port := p.assignedPort
 
 	go pipeToRing(stdout, &p.logs, "stdout")
@@ -236,6 +189,7 @@ func (s *Supervisor) startProcess(p *process) error {
 		go s.probePort(p, port)
 	} else {
 		p.state = StateRunning
+		close(p.running)
 	}
 	s.logEvent(p, "started")
 	return nil
@@ -299,130 +253,248 @@ func (s *Supervisor) Restart(name string) error {
 	if p == nil {
 		return fmt.Errorf("unknown process: %s", name)
 	}
+
+	p.mu.Lock()
+	oldPort := p.assignedPort
+	p.mu.Unlock()
+
 	if err := s.stopProcess(p, "restart"); err != nil {
 		return err
 	}
-	return s.startProcess(p)
+	if err := s.startProcess(p); err != nil {
+		return err
+	}
+
+	p.mu.Lock()
+	newPort := p.assignedPort
+	p.mu.Unlock()
+
+	if oldPort != 0 && newPort != 0 && newPort != oldPort {
+		go s.cascadePortChange(name)
+	}
+	return nil
+}
+
+func (s *Supervisor) StartAll() {
+	s.mu.RLock()
+	order := s.order
+	processes := s.processes
+	s.mu.RUnlock()
+
+	// ready[name] is closed when name has reached StateRunning (or failed to start).
+	ready := make(map[string]chan struct{}, len(order))
+	for _, name := range order {
+		ready[name] = make(chan struct{})
+	}
+
+	var wg sync.WaitGroup
+	for _, name := range order {
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+			defer close(ready[name])
+
+			p := processes[name]
+
+			for _, depName := range p.cfg.DependsOn {
+				<-ready[depName]
+				dep := processes[depName]
+				dep.mu.Lock()
+				state := dep.state
+				dep.mu.Unlock()
+				if state != StateRunning {
+					s.logEvent(p, fmt.Sprintf("dependency %s not ready, skipping", depName))
+					return
+				}
+			}
+
+			if err := s.startProcess(p); err != nil {
+				return
+			}
+
+			// Wait until StateRunning (push-based via p.running).
+			p.mu.Lock()
+			running := p.running
+			state := p.state
+			p.mu.Unlock()
+
+			if state == StateRunning {
+				return
+			}
+			if running != nil {
+				select {
+				case <-running:
+				case <-time.After(30 * time.Second):
+				}
+			}
+		}(name)
+	}
+	wg.Wait()
 }
 
 // RestartAll restarts every process in dependency order, waiting for each
 // dependency to become running before restarting its dependents.
 func (s *Supervisor) RestartAll() {
 	s.mu.RLock()
-	ordered := s.topoOrder()
+	order := s.order
+	processes := s.processes
 	s.mu.RUnlock()
 
-	ready := make(map[string]bool, len(ordered))
+	ready := make(map[string]chan struct{}, len(order))
+	for _, name := range order {
+		ready[name] = make(chan struct{})
+	}
 
-	for _, name := range ordered {
-		s.mu.RLock()
-		p := s.processes[name]
-		s.mu.RUnlock()
+	var wg sync.WaitGroup
+	for _, name := range order {
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+			defer close(ready[name])
 
-		for _, dep := range p.cfg.DependsOn {
-			if !ready[dep] {
-				s.logEvent(p, fmt.Sprintf("dependency %s not ready, skipping", dep))
-				goto skip
+			p := processes[name]
+
+			for _, depName := range p.cfg.DependsOn {
+				<-ready[depName]
+				dep := processes[depName]
+				dep.mu.Lock()
+				state := dep.state
+				dep.mu.Unlock()
+				if state != StateRunning {
+					s.logEvent(p, fmt.Sprintf("dependency %s not ready, skipping", depName))
+					return
+				}
 			}
-		}
 
-		s.Restart(name) //nolint
-		if s.waitForRunning(name, 30*time.Second) {
-			ready[name] = true
-		}
-	skip:
-	}
-}
+			s.stopProcess(p, "restart") //nolint
 
-// topoOrder returns process names with dependencies before dependents.
-// Must be called with s.mu held.
-func (s *Supervisor) topoOrder() []string {
-	visited := make(map[string]bool, len(s.order))
-	result := make([]string, 0, len(s.order))
-
-	var visit func(name string)
-	visit = func(name string) {
-		if visited[name] {
-			return
-		}
-		visited[name] = true
-		for _, dep := range s.processes[name].cfg.DependsOn {
-			visit(dep)
-		}
-		result = append(result, name)
-	}
-
-	for _, name := range s.order {
-		visit(name)
-	}
-	return result
-}
-
-// waitForRunning polls until the named process reaches StateRunning or the
-// timeout expires. Returns true if running, false on timeout or crash.
-func (s *Supervisor) waitForRunning(name string, timeout time.Duration) bool {
-	deadline := time.Now().Add(timeout)
-	for {
-		s.mu.RLock()
-		p := s.processes[name]
-		s.mu.RUnlock()
-		if p == nil {
-			return false
-		}
-		p.mu.Lock()
-		state := p.state
-		p.mu.Unlock()
-		if state == StateRunning {
-			return true
-		}
-		if state == StateCrashed || state == StateStopped {
-			return false
-		}
-		if time.Now().After(deadline) {
-			return false
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-}
-
-func (s *Supervisor) StartAll() {
-	s.mu.RLock()
-	ordered := s.topoOrder()
-	s.mu.RUnlock()
-
-	started := make(map[string]bool, len(ordered))
-
-	for _, name := range ordered {
-		s.mu.RLock()
-		p := s.processes[name]
-		s.mu.RUnlock()
-
-		for _, dep := range p.cfg.DependsOn {
-			if !started[dep] {
-				s.logEvent(p, fmt.Sprintf("dependency %s not started, skipping", dep))
-				goto skip
+			if err := s.startProcess(p); err != nil {
+				return
 			}
-			if !s.waitForRunning(dep, 30*time.Second) {
-				s.logEvent(p, fmt.Sprintf("dependency %s not ready, skipping", dep))
-				goto skip
-			}
-		}
 
-		s.startProcess(p) //nolint
-		started[name] = true
-	skip:
+			p.mu.Lock()
+			running := p.running
+			state := p.state
+			p.mu.Unlock()
+
+			if state == StateRunning {
+				return
+			}
+			if running != nil {
+				select {
+				case <-running:
+				case <-time.After(30 * time.Second):
+				}
+			}
+		}(name)
 	}
+	wg.Wait()
 }
 
 func (s *Supervisor) StopAll() {
 	s.mu.RLock()
 	order := s.order
+	processes := s.processes
+	dependents := s.dependents
 	s.mu.RUnlock()
+
+	// stopped[name] is closed when name has been fully stopped.
+	stopped := make(map[string]chan struct{}, len(order))
 	for _, name := range order {
-		s.mu.RLock()
-		p := s.processes[name]
-		s.mu.RUnlock()
-		s.stopProcess(p, "") //nolint
+		stopped[name] = make(chan struct{})
+	}
+
+	var wg sync.WaitGroup
+	for _, name := range order {
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+			defer close(stopped[name])
+
+			// Wait for all processes that depend on this one to stop first.
+			for _, depName := range dependents[name] {
+				<-stopped[depName]
+			}
+
+			s.stopProcess(processes[name], "") //nolint
+		}(name)
+	}
+	wg.Wait()
+}
+
+// cascadePortChange BFS-restarts every process that (transitively) depends on
+// changedName, but only if each restarted process also gets a new port.
+func (s *Supervisor) cascadePortChange(changedName string) {
+	s.mu.RLock()
+	dependents := s.dependents
+	processes := s.processes
+	s.mu.RUnlock()
+
+	queue := []string{changedName}
+	seen := map[string]bool{changedName: true}
+
+	for len(queue) > 0 {
+		name := queue[0]
+		queue = queue[1:]
+
+		for _, depName := range dependents[name] {
+			if seen[depName] {
+				continue
+			}
+			seen[depName] = true
+
+			p := processes[depName]
+			p.mu.Lock()
+			oldPort := p.assignedPort
+			p.mu.Unlock()
+
+			s.stopProcess(p, fmt.Sprintf("dependency %s port changed", name)) //nolint
+			s.startProcess(p)                                                  //nolint
+
+			p.mu.Lock()
+			newPort := p.assignedPort
+			p.mu.Unlock()
+
+			if oldPort != 0 && newPort != 0 && newPort != oldPort {
+				queue = append(queue, depName)
+			}
+		}
+	}
+}
+
+// waitForRunning blocks until the named process reaches StateRunning or the
+// timeout expires. Returns true if running, false on timeout or crash.
+func (s *Supervisor) waitForRunning(name string, timeout time.Duration) bool {
+	s.mu.RLock()
+	p := s.processes[name]
+	s.mu.RUnlock()
+	if p == nil {
+		return false
+	}
+
+	p.mu.Lock()
+	state := p.state
+	running := p.running
+	p.mu.Unlock()
+
+	if state == StateRunning {
+		return true
+	}
+	if state == StateCrashed || state == StateStopped {
+		return false
+	}
+	if running == nil {
+		return false
+	}
+
+	select {
+	case <-running:
+		p.mu.Lock()
+		st := p.state
+		p.mu.Unlock()
+		return st == StateRunning
+	case <-time.After(timeout):
+		return false
 	}
 }
 
@@ -495,48 +567,7 @@ func (s *Supervisor) watch(p *process, cmd *exec.Cmd) {
 	p.mu.Unlock()
 
 	if oldPort != 0 && newPort != 0 && newPort != oldPort {
-		s.restartDependents(p.cfg.Name, newPort)
-	}
-}
-
-// restartDependents updates the peer port env var and restarts every process
-// that declares a depends_on on changedName, because its port changed.
-func (s *Supervisor) restartDependents(changedName string, newPort int) {
-	portKey := strings.ToUpper(changedName) + "_PORT"
-
-	s.mu.RLock()
-	var toRestart []string
-	for _, name := range s.order {
-		p := s.processes[name]
-		for _, dep := range p.cfg.DependsOn {
-			if dep != changedName {
-				continue
-			}
-			// Update the peer port entry in extraEnv.
-			p.mu.Lock()
-			for i, kv := range p.extraEnv {
-				if key, _, _ := strings.Cut(kv, "="); key == portKey {
-					p.extraEnv[i] = fmt.Sprintf("%s=%d", portKey, newPort)
-					break
-				}
-			}
-			p.mu.Unlock()
-			toRestart = append(toRestart, name)
-			break
-		}
-	}
-	s.mu.RUnlock()
-
-	for _, name := range toRestart {
-		go func(n string) {
-			s.mu.RLock()
-			dp := s.processes[n]
-			s.mu.RUnlock()
-			if dp != nil {
-				s.stopProcess(dp, fmt.Sprintf("dependency %s port changed", changedName)) //nolint
-				s.startProcess(dp)                                                        //nolint
-			}
-		}(name)
+		s.cascadePortChange(p.cfg.Name)
 	}
 }
 
@@ -557,28 +588,12 @@ func (s *Supervisor) probePort(p *process, port int) {
 			p.mu.Lock()
 			if p.state == StateProbing {
 				p.state = StateRunning
+				close(p.running)
 			}
 			p.mu.Unlock()
 			return
 		}
 	}
-}
-
-// rebuildPortEnv replaces the own-port entries in extraEnv with newPort,
-// preserving all peer port entries. Must be called with p.mu held.
-func (p *process) rebuildPortEnv(newPort int) {
-	selfKey := strings.ToUpper(p.cfg.Name) + "_PORT"
-	rebuilt := make([]string, 0, len(p.extraEnv))
-	for _, kv := range p.extraEnv {
-		key, _, _ := strings.Cut(kv, "=")
-		if key != p.cfg.PortEnv && key != selfKey {
-			rebuilt = append(rebuilt, kv)
-		}
-	}
-	p.extraEnv = append(rebuilt,
-		fmt.Sprintf("%s=%d", p.cfg.PortEnv, newPort),
-		fmt.Sprintf("%s=%d", selfKey, newPort),
-	)
 }
 
 func pipeToRing(r io.Reader, ring *ringBuffer, source string) {
