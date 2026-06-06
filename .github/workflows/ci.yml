@@ -86,13 +86,16 @@ jobs:
           path: report.xml
           reporter: java-junit
 
-      - name: Coverage summary
+      - name: Install go-cover-treemap
+        if: matrix.os == 'ubuntu-latest' && (success() || failure())
+        run: go install github.com/nikolaydubina/go-cover-treemap@v1.5.1
+
+      - name: Coverage treemap
         if: matrix.os == 'ubuntu-latest' && (success() || failure())
         run: |
-          go tool cover -func coverage.out | \
-            sed 's|github\.com/saintedlama/invincible/||' | \
-            awk '
-              BEGIN { print "## Coverage\n\n| Package | Coverage |\n|---------|----------|" }
-              /^total:/ { printf "| **%s** | **%s** |\n", $1, $NF; next }
-              { printf "| %s | %s |\n", $1, $NF }
-            ' >> $GITHUB_STEP_SUMMARY
+          go-cover-treemap -coverprofile coverage.out > coverage.svg
+          {
+            echo '## Coverage'
+            echo ''
+            cat coverage.svg
+          } >> $GITHUB_STEP_SUMMARY
