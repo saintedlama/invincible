@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/cobra"
 
 	"github.com/saintedlama/invincible/internal/api"
@@ -42,7 +47,6 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// api-addr precedence: flag > config file (project.api_addr) > default :7777
 	addr := ":7777"
 	if cmd.Flags().Changed("api-addr") {
 		addr, _ = cmd.Flags().GetString("api-addr")
@@ -64,6 +68,29 @@ func runRoot(cmd *cobra.Command, args []string) error {
 
 	go sup.StartAll()
 
+	// Config file watcher.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go watchConfig(ctx, cfgFile, func() {
+		fmt.Fprintln(os.Stderr, "invincible: config changed, reloading...")
+		newCfg, err := config.Load(cfgFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "invincible: reload error: %v\n", err)
+			return
+		}
+		sup.Reload(newCfg.Processes)
+	})
+
+	// Handle Ctrl+C gracefully.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		cancel()
+		sup.StopAll()
+		os.Exit(0)
+	}()
+
 	noTUI, _ := cmd.Flags().GetBool("no-tui")
 	if noTUI {
 		fmt.Printf("http://%s\n", srv.Addr())
@@ -77,4 +104,39 @@ func runRoot(cmd *cobra.Command, args []string) error {
 
 	sup.StopAll()
 	return nil
+}
+
+func watchConfig(ctx context.Context, path string, onChange func()) {
+	w, err := fsnotify.NewWatcher()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "invincible: file watcher: %v — config reload disabled\n", err)
+		return
+	}
+	if err := w.Add(path); err != nil {
+		fmt.Fprintf(os.Stderr, "invincible: watch %s: %v — config reload disabled\n", path, err)
+		w.Close()
+		return
+	}
+	defer w.Close()
+
+	var debounce *time.Timer
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case _, ok := <-w.Events:
+			if !ok {
+				return
+			}
+			if debounce != nil {
+				debounce.Stop()
+			}
+			debounce = time.AfterFunc(200*time.Millisecond, onChange)
+		case err, ok := <-w.Errors:
+			if !ok {
+				return
+			}
+			fmt.Fprintf(os.Stderr, "invincible: watcher: %v\n", err)
+		}
+	}
 }

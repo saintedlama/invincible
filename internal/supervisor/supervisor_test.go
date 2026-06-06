@@ -478,3 +478,102 @@ func logContains(entries []LogEntry, line, source string) bool {
 	}
 	return false
 }
+
+func TestSupervisor_Reload_AddProcess(t *testing.T) {
+	requireSh(t)
+	sup := New([]config.ProcessConfig{
+		{Name: "p1", Cmd: "sleep 60", NoPort: true},
+	})
+	t.Cleanup(sup.StopAll)
+	sup.StartAll()
+	time.Sleep(100 * time.Millisecond)
+
+	if s := sup.Status()[0]; s.State != "running" {
+		t.Fatalf("p1 not running: %q", s.State)
+	}
+
+	sup.Reload([]config.ProcessConfig{
+		{Name: "p1", Cmd: "sleep 60", NoPort: true},
+		{Name: "p2", Cmd: "sleep 60", NoPort: true},
+	})
+	time.Sleep(300 * time.Millisecond)
+
+	statuses := sup.Status()
+	if len(statuses) != 2 {
+		t.Fatalf("got %d processes, want 2", len(statuses))
+	}
+	for _, s := range statuses {
+		if s.State != "running" {
+			t.Errorf("%s: got %q, want running", s.Name, s.State)
+		}
+	}
+}
+
+func TestSupervisor_Reload_RemoveProcess(t *testing.T) {
+	requireSh(t)
+	sup := New([]config.ProcessConfig{
+		{Name: "p1", Cmd: "sleep 60", NoPort: true},
+		{Name: "p2", Cmd: "sleep 60", NoPort: true},
+	})
+	t.Cleanup(sup.StopAll)
+	sup.StartAll()
+	time.Sleep(100 * time.Millisecond)
+
+	sup.Reload([]config.ProcessConfig{
+		{Name: "p1", Cmd: "sleep 60", NoPort: true},
+	})
+	time.Sleep(200 * time.Millisecond)
+
+	statuses := sup.Status()
+	if len(statuses) != 1 {
+		t.Fatalf("got %d processes, want 1", len(statuses))
+	}
+	if statuses[0].Name != "p1" {
+		t.Errorf("expected only p1, got %q", statuses[0].Name)
+	}
+	if statuses[0].State != "running" {
+		t.Errorf("p1: got %q, want running", statuses[0].State)
+	}
+}
+
+func TestSupervisor_Reload_ChangedProcess(t *testing.T) {
+	requireSh(t)
+	sup := New([]config.ProcessConfig{
+		{Name: "p1", Cmd: "sleep 60", NoPort: true, Env: map[string]string{"X": "1"}},
+	})
+	t.Cleanup(sup.StopAll)
+	sup.StartAll()
+	time.Sleep(100 * time.Millisecond)
+
+	pidBefore := sup.Status()[0].PID
+
+	sup.Reload([]config.ProcessConfig{
+		{Name: "p1", Cmd: "sleep 60", NoPort: true, Env: map[string]string{"X": "2"}},
+	})
+	time.Sleep(300 * time.Millisecond)
+
+	s := sup.Status()[0]
+	if s.State != "running" {
+		t.Fatalf("p1 not running: %q", s.State)
+	}
+	if s.PID == pidBefore {
+		t.Error("PID should change after reload restart")
+	}
+}
+
+func TestSupervisor_Reload_EmptyConfig(t *testing.T) {
+	requireSh(t)
+	sup := New([]config.ProcessConfig{
+		{Name: "p1", Cmd: "sleep 60", NoPort: true},
+	})
+	t.Cleanup(sup.StopAll)
+	sup.StartAll()
+	time.Sleep(100 * time.Millisecond)
+
+	sup.Reload(nil)
+	time.Sleep(200 * time.Millisecond)
+
+	if len(sup.Status()) != 0 {
+		t.Errorf("expected 0 processes, got %d", len(sup.Status()))
+	}
+}

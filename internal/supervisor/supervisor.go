@@ -459,6 +459,37 @@ func (s *Supervisor) cascadePortChange(changedName string) {
 	}
 }
 
+func (s *Supervisor) Reload(newCfgs []config.ProcessConfig) {
+	s.StopAll()
+
+	s.mu.Lock()
+	s.processes = make(map[string]*process)
+	s.order = make([]string, 0, len(newCfgs))
+	for _, c := range newCfgs {
+		s.processes[c.Name] = &process{cfg: c}
+		s.order = append(s.order, c.Name)
+	}
+	s.dependents = buildDependents(newCfgs)
+	s.mu.Unlock()
+
+	go s.StartAll()
+}
+
+func buildDependents(cfgs []config.ProcessConfig) map[string][]string {
+	deps := make(map[string][]string, len(cfgs))
+	for _, c := range cfgs {
+		if _, ok := deps[c.Name]; !ok {
+			deps[c.Name] = nil
+		}
+	}
+	for _, c := range cfgs {
+		for _, dep := range c.DependsOn {
+			deps[dep] = append(deps[dep], c.Name)
+		}
+	}
+	return deps
+}
+
 func (s *Supervisor) Status() []ProcessStatus {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
