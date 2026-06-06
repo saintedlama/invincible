@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/saintedlama/invincible/compare/v1.1.0...v1.2.0) (2026-06-06)
+
+
+### Features
+
+* add cwd option to set working directory per process ([3bdfa04](https://github.com/saintedlama/invincible/commit/3bdfa04aa03a7bea42d15ccdfab425de07b58f17))
+
+
+### Bug Fixes
+
+* use cmd on win if no sh installed ([4ee4be2](https://github.com/saintedlama/invincible/commit/4ee4be2261ce06bc085c811cfc35f4ad2c063fec))
+
 ## [1.1.0](https://github.com/saintedlama/invincible/compare/v1.0.0...v1.1.0) (2026-06-04)
 
 
