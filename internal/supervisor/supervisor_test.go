@@ -577,3 +577,28 @@ func TestSupervisor_Reload_EmptyConfig(t *testing.T) {
 		t.Errorf("expected 0 processes, got %d", len(sup.Status()))
 	}
 }
+
+func TestSupervisor_Cwd(t *testing.T) {
+	requireSh(t)
+	tmp := t.TempDir()
+	sup := New([]config.ProcessConfig{
+		{Name: "p1", Cmd: "echo $PWD && sleep 60", Cwd: tmp, NoPort: true},
+	})
+	t.Cleanup(sup.StopAll)
+
+	if err := sup.Start("p1"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(200 * time.Millisecond)
+
+	found := false
+	for _, e := range sup.Logs("p1", 10) {
+		if e.Line != "" && e.Source == "stdout" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected stdout output, got: %v", sup.Logs("p1", 10))
+	}
+}
