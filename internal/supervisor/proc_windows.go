@@ -7,6 +7,13 @@ import (
 	"os/exec"
 )
 
+func shellCommand(cmdStr string) *exec.Cmd {
+	if sh, err := exec.LookPath("sh"); err == nil {
+		return exec.Command(sh, "-c", cmdStr)
+	}
+	return exec.Command("cmd", "/c", cmdStr)
+}
+
 func setProcessGroupAttr(cmd *exec.Cmd) {
 }
 
