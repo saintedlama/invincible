@@ -306,10 +306,10 @@ func TestSupervisor_waitForRunning_Timeout(t *testing.T) {
 
 	// StartAll finds a free port; sleep 60 never binds it so probing never completes.
 	sup.StartAll()
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
-	if sup.waitForRunning("proc", 100*time.Millisecond) {
-		t.Error("expected timeout (port never bound)")
+	if s := sup.Status()[0].State; s != "probing" {
+		t.Errorf("expected probing (port never bound), got %q", s)
 	}
 }
 

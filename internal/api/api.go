@@ -56,11 +56,6 @@ func (s *Server) Addr() string {
 	return s.listener.Addr().String()
 }
 
-// Port returns the port the server is listening on.
-func (s *Server) Port() int {
-	return s.listener.Addr().(*net.TCPAddr).Port
-}
-
 func (s *Server) ListenAndServe() error {
 	return http.Serve(s.listener, s.router)
 }

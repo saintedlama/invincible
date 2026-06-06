@@ -124,7 +124,7 @@ func (s *Supervisor) startProcess(p *process) error {
 		p.assignedPort = port
 	}
 
-	cmd := exec.Command("sh", "-c", p.cfg.Cmd)
+	cmd := shellCommand(p.cfg.Cmd)
 	setProcessGroupAttr(cmd)
 
 	// Build env: parent + config env + own port + dependency ports.
@@ -456,42 +456,6 @@ func (s *Supervisor) cascadePortChange(changedName string) {
 				queue = append(queue, depName)
 			}
 		}
-	}
-}
-
-// waitForRunning blocks until the named process reaches StateRunning or the
-// timeout expires. Returns true if running, false on timeout or crash.
-func (s *Supervisor) waitForRunning(name string, timeout time.Duration) bool {
-	s.mu.RLock()
-	p := s.processes[name]
-	s.mu.RUnlock()
-	if p == nil {
-		return false
-	}
-
-	p.mu.Lock()
-	state := p.state
-	running := p.running
-	p.mu.Unlock()
-
-	if state == StateRunning {
-		return true
-	}
-	if state == StateCrashed || state == StateStopped {
-		return false
-	}
-	if running == nil {
-		return false
-	}
-
-	select {
-	case <-running:
-		p.mu.Lock()
-		st := p.state
-		p.mu.Unlock()
-		return st == StateRunning
-	case <-time.After(timeout):
-		return false
 	}
 }
 
