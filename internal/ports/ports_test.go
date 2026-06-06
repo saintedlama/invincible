@@ -5,22 +5,6 @@ import (
 	"testing"
 )
 
-func TestEnvPair(t *testing.T) {
-	tests := []struct {
-		key, want string
-		port      int
-	}{
-		{"PORT", "PORT=8080", 8080},
-		{"API_PORT", "API_PORT=3000", 3000},
-		{"X", "X=0", 0},
-	}
-	for _, tt := range tests {
-		if got := EnvPair(tt.key, tt.port); got != tt.want {
-			t.Errorf("EnvPair(%q, %d) = %q, want %q", tt.key, tt.port, got, tt.want)
-		}
-	}
-}
-
 func TestIsFree_OccupiedPort(t *testing.T) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -74,6 +58,32 @@ func TestFindFree_WithHint_BusyPort(t *testing.T) {
 	}
 	if port <= 0 || port > 65535 {
 		t.Errorf("FindFree returned invalid port %d", port)
+	}
+}
+
+func TestProbePort_NoListener(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+
+	if ProbePort(port) {
+		t.Errorf("ProbePort(%d) = true, want false (port is free)", port)
+	}
+}
+
+func TestProbePort_HasListener(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	port := l.Addr().(*net.TCPAddr).Port
+
+	if !ProbePort(port) {
+		t.Errorf("ProbePort(%d) = false, want true (port is occupied)", port)
 	}
 }
 

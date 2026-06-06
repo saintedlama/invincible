@@ -244,7 +244,6 @@ func TestSupervisor_ProbePort_StaysProbing(t *testing.T) {
 	}
 }
 
-
 func TestSupervisor_Logs_UnknownProcess(t *testing.T) {
 	sup := New([]config.ProcessConfig{})
 	if logs := sup.Logs("nobody", 10); logs != nil {
@@ -386,7 +385,7 @@ func TestSupervisor_DependencyPortEnv(t *testing.T) {
 	l.Close()
 
 	sup := New([]config.ProcessConfig{
-		{Name: "db",  Cmd: "sleep 60", Port: dbPort, PortEnv: "PORT"},
+		{Name: "db", Cmd: "sleep 60", Port: dbPort, PortEnv: "PORT"},
 		{Name: "api", Cmd: `echo "DB_PORT=$DB_PORT" && sleep 60`, NoPort: true, DependsOn: []string{"db"}},
 	})
 	t.Cleanup(sup.StopAll)
@@ -409,7 +408,7 @@ func TestSupervisor_DependencyPortEnv(t *testing.T) {
 func TestSupervisor_RestartAll(t *testing.T) {
 	requireSh(t)
 	sup := New([]config.ProcessConfig{
-		{Name: "db",  Cmd: "sleep 60", NoPort: true},
+		{Name: "db", Cmd: "sleep 60", NoPort: true},
 		{Name: "api", Cmd: "sleep 60", NoPort: true, DependsOn: []string{"db"}},
 	})
 	t.Cleanup(sup.StopAll)
@@ -438,8 +437,8 @@ func TestSupervisor_RestartAll(t *testing.T) {
 func TestSupervisor_StopAll_DependencyOrder(t *testing.T) {
 	requireSh(t)
 	sup := New([]config.ProcessConfig{
-		{Name: "db",       Cmd: "sleep 60", NoPort: true},
-		{Name: "api",      Cmd: "sleep 60", NoPort: true, DependsOn: []string{"db"}},
+		{Name: "db", Cmd: "sleep 60", NoPort: true},
+		{Name: "api", Cmd: "sleep 60", NoPort: true, DependsOn: []string{"db"}},
 		{Name: "frontend", Cmd: "sleep 60", NoPort: true, DependsOn: []string{"api"}},
 	})
 

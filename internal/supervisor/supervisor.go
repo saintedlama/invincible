@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"net"
 	"os/exec"
 	"strings"
 	"sync"
@@ -117,14 +116,12 @@ func (s *Supervisor) startProcess(p *process) error {
 
 	// Find or re-verify port.
 	if !p.cfg.NoPort {
-		if p.assignedPort == 0 || !ports.IsFree(p.assignedPort) {
-			port, err := ports.FindFree(p.cfg.Port)
-			if err != nil {
-				p.state = StateCrashed
-				return fmt.Errorf("process %q: %w", p.cfg.Name, err)
-			}
-			p.assignedPort = port
+		port, err := ports.FindFree(p.cfg.Port)
+		if err != nil {
+			p.state = StateCrashed
+			return fmt.Errorf("process %q: %w", p.cfg.Name, err)
 		}
+		p.assignedPort = port
 	}
 
 	cmd := exec.Command("sh", "-c", p.cfg.Cmd)
@@ -449,7 +446,7 @@ func (s *Supervisor) cascadePortChange(changedName string) {
 			p.mu.Unlock()
 
 			s.stopProcess(p, fmt.Sprintf("dependency %s port changed", name)) //nolint
-			s.startProcess(p)                                                  //nolint
+			s.startProcess(p)                                                 //nolint
 
 			p.mu.Lock()
 			newPort := p.assignedPort
@@ -571,9 +568,8 @@ func (s *Supervisor) watch(p *process, cmd *exec.Cmd) {
 	}
 }
 
-// probePort polls until the process accepts a connection on its port, then sets StateRunning.
+// probePort polls with ports.ProbePort until the process accepts a connection, then sets StateRunning.
 func (s *Supervisor) probePort(p *process, port int) {
-	addr := fmt.Sprintf("localhost:%d", port)
 	for {
 		time.Sleep(50 * time.Millisecond)
 		p.mu.Lock()
@@ -582,9 +578,7 @@ func (s *Supervisor) probePort(p *process, port int) {
 		if !alive {
 			return
 		}
-		conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
-		if err == nil {
-			conn.Close()
+		if ports.ProbePort(port) {
 			p.mu.Lock()
 			if p.state == StateProbing {
 				p.state = StateRunning

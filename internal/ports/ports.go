@@ -38,7 +38,14 @@ func FindFree(hint int) (int, error) {
 	return 0, fmt.Errorf("no free port found starting from %d", hint)
 }
 
-// EnvPair returns the key=value string to inject into a process environment.
-func EnvPair(envKey string, port int) string {
-	return fmt.Sprintf("%s=%d", envKey, port)
+// ProbePort reports whether a TCP port on localhost is accepting connections.
+func ProbePort(port int) bool {
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("localhost:%d", port), 100*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
 }
+
+
