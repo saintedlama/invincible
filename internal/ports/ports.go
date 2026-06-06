@@ -47,5 +47,3 @@ func ProbePort(port int) bool {
 	conn.Close()
 	return true
 }
-
-
