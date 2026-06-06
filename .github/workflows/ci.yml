@@ -67,6 +67,7 @@ jobs:
         run: go build ./cmd/invincible/
 
       - name: Test
+        shell: bash
         run: |
           gotestsum \
             --junitfile report.xml \

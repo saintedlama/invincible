@@ -48,6 +48,7 @@ type process struct {
 	state       State
 	pid         int
 	cmd         *exec.Cmd
+	done        chan struct{} // closed by watch() after cmd.Wait() returns
 	logs        ringBuffer
 	stopOnce    sync.Once
 	intentional bool
@@ -223,6 +224,7 @@ func (s *Supervisor) startProcess(p *process) error {
 	p.cmd = cmd
 	p.pid = cmd.Process.Pid
 	p.startedAt = time.Now()
+	p.done = make(chan struct{})
 	port := p.assignedPort
 
 	go pipeToRing(stdout, &p.logs, "stdout")
@@ -257,18 +259,13 @@ func (s *Supervisor) stopProcess(p *process, reason string) error {
 	}
 	p.intentional = true
 	cmd := p.cmd
+	done := p.done
 	p.mu.Unlock()
 
 	if cmd == nil || cmd.Process == nil {
 		return nil
 	}
 	s.logEvent(p, "stopping...")
-
-	done := make(chan struct{})
-	go func() {
-		cmd.Wait() //nolint
-		close(done)
-	}()
 
 	termProcessGroup(cmd)
 	select {
@@ -469,6 +466,7 @@ func (s *Supervisor) logEvent(p *process, message string) {
 // watch waits for a process to exit and restarts it unless it was stopped intentionally.
 func (s *Supervisor) watch(p *process, cmd *exec.Cmd) {
 	cmd.Wait() //nolint
+	close(p.done)
 
 	p.mu.Lock()
 	intentional := p.intentional
