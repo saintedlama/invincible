@@ -126,6 +126,9 @@ func (s *Supervisor) startProcess(p *process) error {
 
 	cmd := shellCommand(p.cfg.Cmd)
 	setProcessGroupAttr(cmd)
+	if p.cfg.Cwd != "" {
+		cmd.Dir = p.cfg.Cwd
+	}
 
 	// Build env: parent + config env + own port + dependency ports.
 	env := envFromParent()

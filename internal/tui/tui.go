@@ -12,6 +12,10 @@ import (
 	"github.com/saintedlama/invincible/internal/supervisor"
 )
 
+type caddyProvider interface {
+	ListenAddr() string
+}
+
 type supervisorIface interface {
 	Start(name string) error
 	Stop(name string) error
@@ -58,6 +62,7 @@ type tickMsg time.Time
 type model struct {
 	sup        supervisorIface
 	apiAddr    string
+	caddyAddr  string
 	statuses   []supervisor.ProcessStatus
 	cursor     int
 	filterMode int
@@ -66,11 +71,14 @@ type model struct {
 	height     int
 }
 
-func New(sup supervisorIface, apiAddr string) *tea.Program {
+func New(sup supervisorIface, apiAddr string, caddyMgr caddyProvider) *tea.Program {
 	m := &model{
 		sup:     sup,
 		apiAddr: apiAddr,
 		vp:      viewport.New(),
+	}
+	if caddyMgr != nil {
+		m.caddyAddr = caddyMgr.ListenAddr()
 	}
 	return tea.NewProgram(m)
 }
@@ -301,6 +309,9 @@ func (m *model) renderHelpPanel(contentW int) string {
 	var parts []string
 	if m.apiAddr != "" {
 		parts = append(parts, styleAPI.Render("API http://"+m.apiAddr))
+	}
+	if m.caddyAddr != "" {
+		parts = append(parts, styleAPI.Render("Caddy http://"+m.caddyAddr))
 	}
 	parts = append(parts, styleHelp.Render("↑/↓ navigate  s start  x stop  r restart  Shift+↑/↓ PgUp/PgDn scroll  q quit"))
 	parts = append(parts, styleInvincible.Render("f filter ("+filterLabels[m.filterMode]+")"))

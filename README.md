@@ -50,14 +50,20 @@ Invincible looks for `invincible.toml` in the current directory by default.
 name    = "myapp"
 # api_addr = ":7777"   # override the HTTP API port (default :7777)
 
+[caddy]
+enabled = false
+# port  = 8443          # Caddy listen port (default: 8443)
+
 [[process]]
 name          = "api"
 cmd           = "go run ./cmd/api"
+cwd           = "./backend"   # working directory for this process
 port          = 8080          # hint; Invincible finds the next free port if taken
 # port_env    = "PORT"        # env var injected with this process's port (default: PORT)
 # no_port     = true          # disable port assignment for this process
 # depends_on  = ["worker"]    # restart this process if a dependency changes port
 # restart_delay = "500ms"     # wait before restarting after a crash (default: 500ms)
+# shutdown_timeout = "5s"     # SIGTERM grace period before SIGKILL (default: 5s)
 # env         = { QUEUE = "default" }  # extra static env vars
 
 [[process]]
@@ -95,6 +101,42 @@ depends_on = ["api"]
 If `api` crashes and gets a **new port**, `frontend` is automatically restarted with the updated `API_PORT`. If the port doesn't change, `frontend` is left alone.
 
 Cycles are detected at startup — Invincible exits with an error if a cycle exists.
+
+### Working directory
+
+Set `cwd` to run a command from a specific directory:
+
+```toml
+[[process]]
+name = "frontend"
+cmd  = "npm run dev"
+cwd  = "./frontend"
+port = 5173
+```
+
+### Caddy reverse proxy
+
+Enable the `[caddy]` section to have Invincible generate a Caddyfile and run
+`caddy` as a reverse proxy in front of your services.
+
+```toml
+[caddy]
+enabled = true
+port    = 8443
+```
+
+- **Unix**: subdomain routing — `api.localhost:8443` → `localhost:8080`
+- **Windows**: path-based routing — `localhost:8443/api/*` → `localhost:8080`
+
+Requires the `caddy` binary in your `PATH`. Invincible prints the proxy address
+and routes on startup. Routes stay in sync as process ports change.
+
+### Config file watching
+
+When the config file changes, Invincible automatically reloads: stops all
+processes, rebuilds the dependency graph from the new config, and starts
+everything. Invalid configs are logged and ignored — the running state is
+preserved until a valid edit is saved.
 
 ## Running
 

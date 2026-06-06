@@ -20,6 +20,7 @@ type Project struct {
 type ProcessConfig struct {
 	Name            string            `toml:"name"`
 	Cmd             string            `toml:"cmd"`
+	Cwd             string            `toml:"cwd"`
 	Port            int               `toml:"port"`
 	PortEnv         string            `toml:"port_env"`
 	NoPort          bool              `toml:"no_port"`
@@ -29,8 +30,14 @@ type ProcessConfig struct {
 	ShutdownTimeout string            `toml:"shutdown_timeout"`
 }
 
+type CaddyConfig struct {
+	Enabled bool `toml:"enabled"`
+	Port    int  `toml:"port"`
+}
+
 type Config struct {
 	Project   Project         `toml:"project"`
+	Caddy     CaddyConfig     `toml:"caddy"`
 	Processes []ProcessConfig `toml:"process"`
 }
 

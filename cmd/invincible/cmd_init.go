@@ -22,6 +22,13 @@ const initTemplate = `[project]
 name = "myapp"
 # api_addr = ":7777"  # override the Invincible API port
 
+# Caddy reverse proxy (optional).
+# On Unix: subdomain routing (api.localhost:8443)
+# On Windows: path-based routing (localhost:8443/api/*)
+[caddy]
+enabled = false
+# port = 8443
+
 # Each [[process]] block defines one managed service.
 # Invincible finds a free port starting from the hint and injects it as PORT=<n>.
 # Every process also receives <PEER_NAME>_PORT=<n> for each sibling that has a port.
@@ -29,6 +36,7 @@ name = "myapp"
 [[process]]
 name = "api"
 cmd = "go run ./cmd/api"
+cwd = "./backend"
 port = 8080
 # port_env = "PORT"          # env var name for this process's own port (default: PORT)
 # restart_delay = "500ms"    # wait before restarting a crashed process

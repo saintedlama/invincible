@@ -323,3 +323,40 @@ no_port = true
 		t.Error("no_port: expected true")
 	}
 }
+
+func TestLoad_CaddyDisabled(t *testing.T) {
+	path := writeToml(t, `
+[[process]]
+name = "api"
+cmd = "echo"
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Caddy.Enabled {
+		t.Error("caddy should be disabled by default")
+	}
+}
+
+func TestLoad_CaddyEnabled(t *testing.T) {
+	path := writeToml(t, `
+[caddy]
+enabled = true
+port = 8443
+
+[[process]]
+name = "api"
+cmd = "echo"
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Caddy.Enabled {
+		t.Error("caddy.Enabled: expected true")
+	}
+	if cfg.Caddy.Port != 8443 {
+		t.Errorf("caddy.Port: got %d, want 8443", cfg.Caddy.Port)
+	}
+}

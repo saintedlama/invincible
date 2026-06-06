@@ -32,6 +32,12 @@ func newTestModel(sup supervisorIface) *model {
 	}
 }
 
+var _ caddyProvider = (*stubCaddy)(nil)
+
+type stubCaddy struct{}
+
+func (s stubCaddy) ListenAddr() string { return "127.0.0.1:8443" }
+
 func key(code rune) tea.KeyPressMsg {
 	return tea.KeyPressMsg{Code: code}
 }
