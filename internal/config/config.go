@@ -20,6 +20,7 @@ type Project struct {
 type ProcessConfig struct {
 	Name            string            `toml:"name"`
 	Cmd             string            `toml:"cmd"`
+	Cwd             string            `toml:"cwd"`
 	Port            int               `toml:"port"`
 	PortEnv         string            `toml:"port_env"`
 	NoPort          bool              `toml:"no_port"`
