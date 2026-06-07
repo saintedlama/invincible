@@ -499,6 +499,16 @@ func (s *Supervisor) logEvent(p *process, message string) {
 	p.logs.write(message, "invincible")
 }
 
+// Log appends a message to the named process's log as an invincible event.
+func (s *Supervisor) Log(name, message string) {
+	s.mu.RLock()
+	p := s.processes[name]
+	s.mu.RUnlock()
+	if p != nil {
+		p.logs.write(message, "invincible")
+	}
+}
+
 // watch waits for a process to exit and restarts it unless it was stopped intentionally.
 func (s *Supervisor) watch(p *process, cmd *exec.Cmd) {
 	cmd.Wait() //nolint

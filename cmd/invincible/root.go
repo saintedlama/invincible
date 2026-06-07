@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/saintedlama/invincible/internal/config"
 	"github.com/saintedlama/invincible/internal/supervisor"
 	"github.com/saintedlama/invincible/internal/tui"
+	"github.com/saintedlama/invincible/internal/watcher"
 )
 
 var cfgFile string
@@ -63,6 +65,19 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	}()
 
 	go sup.StartAll()
+
+	// PROTOTYPE: start a file watcher for every process that has watch+build configured.
+	watchCtx, watchCancel := context.WithCancel(context.Background())
+	defer watchCancel()
+	for _, p := range cfg.Processes {
+		if len(p.Watch) == 0 || p.Build == "" {
+			continue
+		}
+		proc := p // capture
+		logFn := func(msg string) { sup.Log(proc.Name, msg) }
+		w := watcher.New(proc.Name, proc.Watch, proc.WatchInclude, proc.Build, proc.Cwd, sup, logFn)
+		go w.Run(watchCtx)
+	}
 
 	noTUI, _ := cmd.Flags().GetBool("no-tui")
 	if noTUI {

@@ -479,6 +479,40 @@ func logContains(entries []LogEntry, line, source string) bool {
 	return false
 }
 
+func TestSupervisor_CrashRestart_ProbesPort(t *testing.T) {
+	requireSh(t)
+
+	// Grab a free port and release it so startProcess can assign it.
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+
+	// exit 1 crashes immediately; without NoPort, probing should always run on restart.
+	sup := New([]config.ProcessConfig{
+		{Name: "crasher", Cmd: "exit 1", PortEnv: "PORT", Port: port},
+	})
+	t.Cleanup(sup.StopAll)
+
+	if err := sup.Start("crasher"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Allow several crash→restart cycles.
+	time.Sleep(400 * time.Millisecond)
+
+	s := sup.Status()[0]
+	if s.Restarts == 0 {
+		t.Fatal("expected at least one crash-triggered restart")
+	}
+	// Port is never bound, so state must never skip to running.
+	if s.State == "running" {
+		t.Errorf("port probe was skipped on crash restart: got state %q, want probing or crashed", s.State)
+	}
+}
+
 func TestSupervisor_Cwd(t *testing.T) {
 	requireSh(t)
 	tmp := t.TempDir()

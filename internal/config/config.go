@@ -28,6 +28,10 @@ type ProcessConfig struct {
 	Env             map[string]string `toml:"env"`
 	RestartDelay    string            `toml:"restart_delay"`
 	ShutdownTimeout string            `toml:"shutdown_timeout"`
+	// PROTOTYPE: watch + build support
+	Watch        []string `toml:"watch"`         // directories to watch for changes
+	WatchInclude []string `toml:"watch_include"` // file glob patterns to react to, e.g. ["*.go"]
+	Build        string   `toml:"build"`         // command to run before restarting
 }
 
 type Config struct {
