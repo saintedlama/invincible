@@ -192,6 +192,7 @@ func (m *model) View() tea.View {
 
 	v := tea.NewView(body)
 	v.AltScreen = true
+	v.WindowTitle = m.windowTitle()
 	return v
 }
 
@@ -340,6 +341,17 @@ func formatLogEntries(entries []supervisor.LogEntry) []string {
 		out[i] = ts + " " + content
 	}
 	return out
+}
+
+func (m *model) windowTitle() string {
+	total := len(m.statuses)
+	running := 0
+	for _, s := range m.statuses {
+		if s.State == "running" {
+			running++
+		}
+	}
+	return fmt.Sprintf("%d/%d invincible", running, total)
 }
 
 func boolInt(b bool) int {
