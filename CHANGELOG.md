@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/saintedlama/invincible/compare/v1.2.0...v1.3.0) (2026-06-07)
+
+
+### Features
+
+* display process status in window title ([3923621](https://github.com/saintedlama/invincible/commit/3923621d9b786f25207067bd015090056a6dca8c))
+
 ## [1.2.0](https://github.com/saintedlama/invincible/compare/v1.1.0...v1.2.0) (2026-06-06)
 
 
