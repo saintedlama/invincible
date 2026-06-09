@@ -10,7 +10,7 @@ import (
 )
 
 const DefaultRestartDelay = 500 * time.Millisecond
-const DefaultShutdownTimeout = 5 * time.Second
+const DefaultShutdownTimeout = 500 * time.Millisecond
 
 type Project struct {
 	Name    string `toml:"name"`

@@ -64,6 +64,7 @@ type model struct {
 	vp         viewport.Model
 	width      int
 	height     int
+	lastWheel  time.Time
 }
 
 func New(sup supervisorIface, apiAddr string) *tea.Program {
@@ -95,6 +96,34 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, tick()
+
+	case tea.MouseWheelMsg:
+		mouse := msg.Mouse()
+		if time.Since(m.lastWheel) < 50*time.Millisecond {
+			return m, nil
+		}
+		m.lastWheel = time.Now()
+		if mouse.Y >= m.height-helpPanelH {
+			return m, nil
+		}
+		if mouse.X < leftContentW {
+			if mouse.Button == tea.MouseWheelUp && m.cursor > 0 {
+				m.cursor--
+				m.loadLogs()
+				m.vp.GotoBottom()
+			} else if mouse.Button == tea.MouseWheelDown && m.cursor < len(m.statuses)-1 {
+				m.cursor++
+				m.loadLogs()
+				m.vp.GotoBottom()
+			}
+		} else {
+			switch mouse.Button {
+			case tea.MouseWheelUp:
+				m.vp.ScrollUp(1)
+			case tea.MouseWheelDown:
+				m.vp.ScrollDown(1)
+			}
+		}
 
 	case tea.KeyPressMsg:
 		shift := msg.Mod&tea.ModShift != 0
@@ -192,6 +221,7 @@ func (m *model) View() tea.View {
 
 	v := tea.NewView(body)
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
 	v.WindowTitle = m.windowTitle()
 	return v
 }
@@ -218,9 +248,10 @@ func (m *model) renderDetailPanel(contentW, totalH int) string {
 	}
 	s := m.statuses[m.cursor]
 
-	infoContent, infoLines := renderProcessInfo(s)
-	// content_lines(infoLines+1 trailing \n) + borders(2) + paddingBottom(1) = infoLines+4
-	infoPanelRendered := infoLines + 4
+	infoContent := renderProcessInfo(s)
+	infoLines := strings.Count(infoContent, "\n") + 1
+	// content_lines + border_top(1) + border_bottom(1) + padding_bottom(1) = infoLines+3
+	infoPanelRendered := infoLines + 3
 	logsPanelH := totalH - infoPanelRendered
 
 	infoPanel := detailPanelStyle.Width(contentW).Height(infoPanelRendered).Render(infoContent)
@@ -229,15 +260,31 @@ func (m *model) renderDetailPanel(contentW, totalH int) string {
 	return lipgloss.JoinVertical(lipgloss.Left, infoPanel, logsPanel)
 }
 
-func renderProcessInfo(s supervisor.ProcessStatus) (string, int) {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "%s\n\n", lipgloss.NewStyle().Bold(true).Render(s.Name))
+func renderProcessInfo(s supervisor.ProcessStatus) string {
+	var lines []string
+
+	showUptime := !s.StartedAt.IsZero() && (s.State == "running" || s.State == "probing")
+
+	nameLine := lipgloss.NewStyle().Bold(true).Render(s.Name)
+	if showUptime {
+		nameLine += " " + styleLabel.Render("(up "+time.Since(s.StartedAt).Truncate(time.Second).String()+")")
+	}
+	lines = append(lines, nameLine)
+	lines = append(lines, "") // blank separator
+
+	f := func(key, val string) string {
+		return fmt.Sprintf("%s  %s", styleLabel.Render(fmt.Sprintf("%-5s", key)), val)
+	}
 
 	kv := func(key, val string) {
-		fmt.Fprintf(&sb, "%s  %s\n", styleLabel.Render(fmt.Sprintf("%-5s", key)), val)
+		lines = append(lines, f(key, val))
 	}
 
 	kv("cmd", s.Cmd)
+
+	if s.Cwd != "" {
+		kv("cwd", s.Cwd)
+	}
 
 	stateStr := s.State
 	if s.PID > 0 {
@@ -245,13 +292,15 @@ func renderProcessInfo(s supervisor.ProcessStatus) (string, int) {
 	}
 	kv("state", stateStr)
 
-	if s.Port > 0 {
-		kv("port", fmt.Sprintf("%d", s.Port))
-	}
-
-	showUptime := !s.StartedAt.IsZero() && (s.State == "running" || s.State == "probing")
-	if showUptime {
-		kv("up", time.Since(s.StartedAt).Truncate(time.Second).String())
+	if s.Port > 0 || s.PortEnv != "" {
+		var parts []string
+		if s.Port > 0 {
+			parts = append(parts, f("port", fmt.Sprintf("%d", s.Port)))
+		}
+		if s.PortEnv != "" {
+			parts = append(parts, f("penv", s.PortEnv))
+		}
+		lines = append(lines, strings.Join(parts, "    "))
 	}
 
 	if s.Restarts > 0 {
@@ -271,9 +320,7 @@ func renderProcessInfo(s supervisor.ProcessStatus) (string, int) {
 		kv("env", k+"="+s.Env[k])
 	}
 
-	// name(1) + blank(1) + cmd(1) + state(1) + optional port + optional uptime + optional crashes + optional deps + env lines
-	lines := 4 + boolInt(s.Port > 0) + boolInt(showUptime) + boolInt(s.Restarts > 0) + boolInt(len(s.DependsOn) > 0) + len(s.Env)
-	return sb.String(), lines
+	return strings.Join(lines, "\n")
 }
 
 func (m *model) renderLogsPanel(contentW, totalH int) string {
@@ -354,9 +401,4 @@ func (m *model) windowTitle() string {
 	return fmt.Sprintf("%d/%d invincible", running, total)
 }
 
-func boolInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
+

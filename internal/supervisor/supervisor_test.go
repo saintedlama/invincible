@@ -434,7 +434,7 @@ func TestSupervisor_RestartAll(t *testing.T) {
 	}
 }
 
-func TestSupervisor_StopAll_DependencyOrder(t *testing.T) {
+func TestSupervisor_StopAll_Concurrent(t *testing.T) {
 	requireSh(t)
 	sup := New([]config.ProcessConfig{
 		{Name: "db", Cmd: "sleep 60", NoPort: true},
@@ -446,27 +446,17 @@ func TestSupervisor_StopAll_DependencyOrder(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	sup.StopAll()
 
-	stopTime := func(name string) time.Time {
+	for _, name := range []string{"frontend", "api", "db"} {
+		stopped := false
 		for _, e := range sup.Logs(name, 50) {
 			if e.Line == "stopped" && e.Source == "invincible" {
-				return e.Time
+				stopped = true
+				break
 			}
 		}
-		return time.Time{}
-	}
-
-	frontendStopped := stopTime("frontend")
-	apiStopped := stopTime("api")
-	dbStopped := stopTime("db")
-
-	if frontendStopped.IsZero() || apiStopped.IsZero() || dbStopped.IsZero() {
-		t.Fatal("not all processes logged 'stopped'")
-	}
-	if frontendStopped.After(apiStopped) {
-		t.Errorf("frontend must stop before api: frontend=%v api=%v", frontendStopped, apiStopped)
-	}
-	if apiStopped.After(dbStopped) {
-		t.Errorf("api must stop before db: api=%v db=%v", apiStopped, dbStopped)
+		if !stopped {
+			t.Errorf("%s was not stopped", name)
+		}
 	}
 }
 

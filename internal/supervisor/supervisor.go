@@ -59,7 +59,9 @@ type ProcessStatus struct {
 	State     string
 	PID       int
 	Cmd       string
+	Cwd       string
 	Port      int
+	PortEnv   string
 	Env       map[string]string
 	DependsOn []string
 	Restarts  int
@@ -395,27 +397,13 @@ func (s *Supervisor) StopAll() {
 	s.mu.RLock()
 	order := s.order
 	processes := s.processes
-	dependents := s.dependents
 	s.mu.RUnlock()
-
-	// stopped[name] is closed when name has been fully stopped.
-	stopped := make(map[string]chan struct{}, len(order))
-	for _, name := range order {
-		stopped[name] = make(chan struct{})
-	}
 
 	var wg sync.WaitGroup
 	for _, name := range order {
 		wg.Add(1)
 		go func(name string) {
 			defer wg.Done()
-			defer close(stopped[name])
-
-			// Wait for all processes that depend on this one to stop first.
-			for _, depName := range dependents[name] {
-				<-stopped[depName]
-			}
-
 			s.stopProcess(processes[name], "") //nolint
 		}(name)
 	}
@@ -474,7 +462,9 @@ func (s *Supervisor) Status() []ProcessStatus {
 			State:     p.state.String(),
 			PID:       p.pid,
 			Cmd:       p.cfg.Cmd,
+			Cwd:       p.cfg.Cwd,
 			Port:      p.assignedPort,
+			PortEnv:   p.cfg.PortEnv,
 			Env:       p.cfg.Env,
 			DependsOn: p.cfg.DependsOn,
 			Restarts:  p.restarts,
