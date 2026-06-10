@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.4.0](https://github.com/saintedlama/invincible/compare/v1.3.0...v1.4.0) (2026-06-10)
+
+
+### Features
+
+* add stop/start/restart all ([32dae26](https://github.com/saintedlama/invincible/commit/32dae2648aad539acc512955143905d9e73f5224))
+* add watch and build support, fix stopping of processes, faster ([27a8bc2](https://github.com/saintedlama/invincible/commit/27a8bc22cd4a2ed807f3aa2473b3519604c50e72))
+* use dependency graph for ordered start/stop, add building state ([da30d91](https://github.com/saintedlama/invincible/commit/da30d919618efd5a7c9d3717fbe0a2853a1c6e1e))
+
+
+### Bug Fixes
+
+* fix shutdown period, condense ui for smaller screens, fix mouse ([57be4ae](https://github.com/saintedlama/invincible/commit/57be4ae307cfa5ca6067d3e36eccff8959014572))
+
 ## [1.3.0](https://github.com/saintedlama/invincible/compare/v1.2.0...v1.3.0) (2026-06-07)
 
 
