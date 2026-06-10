@@ -4,13 +4,12 @@
 
 A process manager for local development, written in Go.
 
-Keep services alive, restart them on crash, assign free ports automatically, and wire up port dependencies between services — no Docker required. Comes with a terminal UI for humans and an HTTP API for agents.
+Keep services alive, restart them on crash, assign free ports automatically, wire up port dependencies, and optionally watch files for auto-rebuild — no Docker required. Comes with a terminal UI for humans and an HTTP API for agents.
 
 ## Invincible is Not
 
 - A replacement for `make`
 - A replacement for a full process manager like systemd or supervisor
-- A hot-reload tool
 - Intended for production use
 
 ## Installation
@@ -59,7 +58,7 @@ port          = 8080          # hint; Invincible finds the next free port if tak
 # no_port     = true          # disable port assignment for this process
 # depends_on  = ["worker"]    # restart this process if a dependency changes port
 # restart_delay = "500ms"     # wait before restarting after a crash (default: 500ms)
-# shutdown_timeout = "5s"     # SIGTERM grace period before SIGKILL (default: 5s)
+# shutdown_timeout = "500ms"  # SIGTERM grace period before SIGKILL
 # env         = { QUEUE = "default" }  # extra static env vars
 
 [[process]]
@@ -110,6 +109,28 @@ cwd  = "./frontend"
 port = 5173
 ```
 
+### File watching + auto-rebuild (opt-in)
+
+When `watch` and `build` are both configured for a process, Invincible watches the specified directories for file changes, runs the build command, and restarts the process on success. If the build fails, the old binary keeps running.
+
+Watch directories are relative to `cwd` when set, otherwise relative to the project root.
+
+```toml
+[[process]]
+name  = "api"
+cmd   = "./bin/api"
+cwd   = "./backend"
+
+# Rebuild and restart on file changes
+build           = "go build -o ./bin/api ./cmd/api"
+watch           = ["."]                      # directories to watch
+watch_include   = ["*.go", "*.templ"]       # file globs that trigger rebuild (default: all)
+watch_exclude   = ["vendor", ".git", "tmp"] # subdirectories to skip
+watch_debounce  = "500ms"                   # quiet period before triggering (default: 500ms)
+```
+
+The TUI detail panel shows `watch  on` for processes with active file watching. Build output and watch events appear in the process logs with the `invincible` source.
+
 ## Running
 
 ```sh
@@ -130,9 +151,17 @@ Flags:
 | `s` | Start selected process |
 | `x` | Stop selected process |
 | `r` | Restart selected process |
+| `f` | Cycle log filter (ALL → STDERR → STDOUT → INVINCIBLE) |
 | `Shift+↑` / `PgUp` | Scroll logs up |
 | `Shift+↓` / `PgDn` | Scroll logs down |
 | `q` / `Ctrl+C` | Quit |
+
+### Mouse support
+
+| Action | Area |
+|---|---|
+| Scroll wheel | Over process list: select next/previous process |
+| Scroll wheel | Over log panel: scroll logs |
 
 ## CLI commands
 
@@ -162,15 +191,18 @@ The API binds to `127.0.0.1` and is only accessible locally. The default port is
 
 ```json
 {
-  "Name":      "api",
-  "State":     "running",
-  "PID":       1234,
-  "Cmd":       "go run ./cmd/api",
-  "Port":      8080,
-  "DependsOn": ["worker"],
-  "Restarts":  0,
-  "StartedAt": "2026-06-04T08:00:00Z",
-  "Env":       { "QUEUE": "default" }
+  "Name":       "api",
+  "State":      "running",
+  "PID":        1234,
+  "Cmd":        "go run ./cmd/api",
+  "Cwd":        "./backend",
+  "Port":       8080,
+  "PortEnv":    "PORT",
+  "DependsOn":  ["worker"],
+  "Restarts":   0,
+  "StartedAt":  "2026-06-04T08:00:00Z",
+  "Watching":   true,
+  "Env":        { "QUEUE": "default" }
 }
 ```
 
@@ -181,7 +213,9 @@ The API binds to `127.0.0.1` and is only accessible locally. The default port is
 ### Log entry object
 
 ```json
-{ "time": "2026-06-04T08:22:01Z", "line": "server started on :8080", "stderr": false }
+{ "time": "2026-06-04T08:22:01Z", "line": "server started on :8080", "source": "stdout" }
 ```
+
+Source values: `stdout`, `stderr`, or `invincible` (system events / build output).
 
 Use `?format=text` for plain newline-separated output (no metadata).
