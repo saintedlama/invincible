@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -85,18 +84,8 @@ func runRoot(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		onBuild := func() error {
-			cmd := supervisor.ShellCommand(proc.Build)
-			if proc.Cwd != "" {
-				cmd.Dir = proc.Cwd
-			}
-			out, err := cmd.CombinedOutput()
-			for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-				if line != "" {
-					sup.Log(name, "build: "+line)
-				}
-			}
-			return err
+		onBuild := func(ctx context.Context) error {
+			return sup.Build(proc.Name, proc.Build, proc.Cwd, ctx)
 		}
 
 		onRestart := func() error {

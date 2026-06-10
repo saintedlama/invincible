@@ -30,7 +30,7 @@ func termProcessGroup(cmd *exec.Cmd) {
 	windows.GenerateConsoleCtrlEvent(windows.CTRL_BREAK_EVENT, uint32(cmd.Process.Pid)) //nolint
 }
 
-func killProcessGroup(cmd *exec.Cmd) {
+func KillProcessGroup(cmd *exec.Cmd) {
 	if cmd.Process == nil {
 		return
 	}

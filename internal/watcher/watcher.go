@@ -14,12 +14,12 @@ type Watcher struct {
 	include   []string
 	exclude   []string
 	debounce  time.Duration
-	onBuild   func() error
+	onBuild   func(context.Context) error
 	onRestart func() error
 	log       func(string)
 }
 
-func New(dirs, include, exclude []string, debounce time.Duration, onBuild, onRestart func() error, log func(string)) *Watcher {
+func New(dirs, include, exclude []string, debounce time.Duration, onBuild func(context.Context) error, onRestart func() error, log func(string)) *Watcher {
 	return &Watcher{
 		dirs:      dirs,
 		include:   include,
@@ -61,6 +61,14 @@ func (w *Watcher) Run(ctx context.Context) {
 
 	var timer *time.Timer
 	var timerC <-chan time.Time
+	var buildCancel context.CancelFunc
+
+	cancelBuild := func() {
+		if buildCancel != nil {
+			buildCancel()
+			buildCancel = nil
+		}
+	}
 
 	for {
 		select {
@@ -68,10 +76,25 @@ func (w *Watcher) Run(ctx context.Context) {
 			if timer != nil {
 				timer.Stop()
 			}
+			cancelBuild()
 			return
 		case <-timerC:
 			timer = nil
-			w.buildAndRestart()
+			buildCtx, cancel := context.WithCancel(ctx)
+			buildCancel = cancel
+
+			if err := w.onBuild(buildCtx); err != nil {
+				if buildCancel != nil {
+					w.log("build: FAILED — " + err.Error())
+				}
+			} else {
+				w.log("build: ok — restarting")
+				if err := w.onRestart(); err != nil {
+					w.log("restart: " + err.Error())
+				}
+			}
+			buildCancel = nil
+
 		case event, ok := <-fsw.Events:
 			if !ok {
 				return
@@ -89,6 +112,13 @@ func (w *Watcher) Run(ctx context.Context) {
 			if !w.matchesInclude(event.Name) {
 				continue
 			}
+
+			if buildCancel != nil {
+				buildCancel()
+				buildCancel = nil
+				w.log("watch: build cancelled")
+			}
+
 			if timer == nil {
 				timer = time.NewTimer(w.debounce)
 				timerC = timer.C
@@ -96,24 +126,13 @@ func (w *Watcher) Run(ctx context.Context) {
 				timer.Reset(w.debounce)
 			}
 			w.log("watch: change detected in " + event.Name)
+
 		case err, ok := <-fsw.Errors:
 			if !ok {
 				return
 			}
 			w.log("watch: " + err.Error())
 		}
-	}
-}
-
-func (w *Watcher) buildAndRestart() {
-	w.log("build: running...")
-	if err := w.onBuild(); err != nil {
-		w.log("build: FAILED — " + err.Error())
-		return
-	}
-	w.log("build: ok — restarting")
-	if err := w.onRestart(); err != nil {
-		w.log("restart: " + err.Error())
 	}
 }
 

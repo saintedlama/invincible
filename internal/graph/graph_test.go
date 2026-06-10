@@ -178,3 +178,131 @@ func TestNodeNotFound(t *testing.T) {
 		t.Fatal("expected nil for missing node")
 	}
 }
+
+func TestStopLevelsChain(t *testing.T) {
+	// db → api → frontend
+	g := New([]Edge{
+		{Name: "db"},
+		{Name: "api", Deps: []string{"db"}},
+		{Name: "frontend", Deps: []string{"api"}},
+	})
+
+	levels := g.StopLevels()
+	if len(levels) != 3 {
+		t.Fatalf("got %d levels, want 3: %v", len(levels), levels)
+	}
+	// frontend has no dependents → level 0
+	if !slices.Equal(levels[0], []string{"frontend"}) {
+		t.Fatalf("level 0: %v", levels[0])
+	}
+	// api → level 1
+	if !slices.Equal(levels[1], []string{"api"}) {
+		t.Fatalf("level 1: %v", levels[1])
+	}
+	// db → level 2
+	if !slices.Equal(levels[2], []string{"db"}) {
+		t.Fatalf("level 2: %v", levels[2])
+	}
+}
+
+func TestStopLevelsDiamond(t *testing.T) {
+	g := New([]Edge{
+		{Name: "db"},
+		{Name: "api", Deps: []string{"db"}},
+		{Name: "frontend", Deps: []string{"api"}},
+		{Name: "backend", Deps: []string{"frontend", "api", "db"}},
+	})
+
+	levels := g.StopLevels()
+	// backend has no dependents → level 0
+	if !slices.Contains(levels[0], "backend") {
+		t.Fatalf("level 0 missing backend: %v", levels[0])
+	}
+	if len(levels) != 4 {
+		t.Fatalf("got %d levels, want 4: %v", len(levels), levels)
+	}
+	// Level 0: backend (nothing depends on it)
+	// Level 1: frontend (only backend depended on it)
+	// Level 2: api (frontend and backend depended on it)
+	// Level 3: db (api and backend depended on it)
+	if !slices.Contains(levels[0], "backend") {
+		t.Fatalf("level 0 missing backend: %v", levels[0])
+	}
+	if !slices.Contains(levels[len(levels)-1], "db") {
+		t.Fatalf("last level missing db: %v", levels[len(levels)-1])
+	}
+}
+
+func TestStopLevelsEmpty(t *testing.T) {
+	g := New(nil)
+	levels := g.StopLevels()
+	if len(levels) != 0 {
+		t.Fatalf("expected empty, got %v", levels)
+	}
+}
+
+func TestStartLevelsChain(t *testing.T) {
+	g := New([]Edge{
+		{Name: "db"},
+		{Name: "api", Deps: []string{"db"}},
+		{Name: "frontend", Deps: []string{"api"}},
+	})
+
+	levels := g.StartLevels()
+	if len(levels) != 3 {
+		t.Fatalf("got %d levels, want 3: %v", len(levels), levels)
+	}
+	// db has no deps → level 0
+	if !slices.Equal(levels[0], []string{"db"}) {
+		t.Fatalf("level 0: %v", levels[0])
+	}
+	// api → level 1
+	if !slices.Equal(levels[1], []string{"api"}) {
+		t.Fatalf("level 1: %v", levels[1])
+	}
+	// frontend → level 2
+	if !slices.Equal(levels[2], []string{"frontend"}) {
+		t.Fatalf("level 2: %v", levels[2])
+	}
+}
+
+func TestStartLevelsDiamond(t *testing.T) {
+	g := New([]Edge{
+		{Name: "db"},
+		{Name: "api", Deps: []string{"db"}},
+		{Name: "frontend", Deps: []string{"api"}},
+		{Name: "backend", Deps: []string{"frontend", "api", "db"}},
+	})
+
+	levels := g.StartLevels()
+	if len(levels) != 4 {
+		t.Fatalf("got %d levels, want 4: %v", len(levels), levels)
+	}
+	// db has no deps → level 0
+	if !slices.Contains(levels[0], "db") {
+		t.Fatalf("level 0 missing db: %v", levels[0])
+	}
+	// backend needs 3 things → must be last
+	if !slices.Contains(levels[len(levels)-1], "backend") {
+		t.Fatalf("last level missing backend: %v", levels[len(levels)-1])
+	}
+}
+
+func TestLevelsCoverAllNodes(t *testing.T) {
+	g := New([]Edge{
+		{Name: "db"},
+		{Name: "api", Deps: []string{"db"}},
+		{Name: "frontend", Deps: []string{"api"}},
+		{Name: "backend", Deps: []string{"frontend", "api", "db"}},
+	})
+
+	for _, levels := range [][][]string{g.StartLevels(), g.StopLevels()} {
+		count := 0
+		for _, level := range levels {
+			count += len(level)
+		}
+		if count != g.Len() {
+			t.Fatalf("levels cover %d of %d nodes", count, g.Len())
+		}
+	}
+}

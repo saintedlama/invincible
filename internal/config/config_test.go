@@ -293,6 +293,37 @@ depends_on = ["a"]
 	if err == nil {
 		t.Fatal("expected error for dependency cycle")
 	}
+	want := "dependency cycle: a → b → a"
+	if err.Error() != want {
+		t.Errorf("got %q, want %q", err.Error(), want)
+	}
+}
+
+func TestLoad_DependsOn_Cycle3(t *testing.T) {
+	path := writeToml(t, `
+[[process]]
+name = "a"
+cmd = "echo"
+depends_on = ["b"]
+
+[[process]]
+name = "b"
+cmd = "echo"
+depends_on = ["c"]
+
+[[process]]
+name = "c"
+cmd = "echo"
+depends_on = ["a"]
+`)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for 3-node dependency cycle")
+	}
+	want := "dependency cycle: a → b → c → a"
+	if err.Error() != want {
+		t.Errorf("got %q, want %q", err.Error(), want)
+	}
 }
 
 func TestLoad_DependsOn_SelfCycle(t *testing.T) {
@@ -305,6 +336,10 @@ depends_on = ["a"]
 	_, err := Load(path)
 	if err == nil {
 		t.Fatal("expected error for self-dependency")
+	}
+	want := "dependency cycle: a → a"
+	if err.Error() != want {
+		t.Errorf("got %q, want %q", err.Error(), want)
 	}
 }
 

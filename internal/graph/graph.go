@@ -68,6 +68,61 @@ func (g *Graph) WalkDependents(start string, fn func(name string) bool) {
 	}
 }
 
+// StopLevels returns the graph partitioned into levels for ordered shutdown.
+// Level 0 contains processes with no dependents — stop these first. Each
+// subsequent level can be stopped after all previous levels finish. Processes
+// within the same level can be stopped concurrently.
+func (g *Graph) StopLevels() [][]string {
+	return g.levelOrder(func(n *Node) int { return len(n.DepsBy) }, func(n *Node) []string { return n.Deps })
+}
+
+// StartLevels returns the graph partitioned into levels for ordered startup.
+// Level 0 contains processes with no dependencies — start these first. Each
+// subsequent level can be started after all previous levels are running.
+// Processes within the same level can be started concurrently.
+func (g *Graph) StartLevels() [][]string {
+	return g.levelOrder(func(n *Node) int { return len(n.Deps) }, func(n *Node) []string { return n.DepsBy })
+}
+
+// levelOrder is Kahn's algorithm parameterised by the "blocking edge" direction.
+// inCount extracts the incoming edge count for a node (edges from dependents
+// for StopLevels, edges from dependencies for StartLevels). resolve returns
+// the outgoing edges to propagate once a node is resolved.
+func (g *Graph) levelOrder(inCount func(*Node) int, resolve func(*Node) []string) [][]string {
+	indeg := make(map[string]int, len(g.nodes))
+	for name, n := range g.nodes {
+		indeg[name] = inCount(n)
+	}
+
+	var levels [][]string
+	var current []string
+	for name, d := range indeg {
+		if d == 0 {
+			current = append(current, name)
+		}
+	}
+
+	for len(current) > 0 {
+		levels = append(levels, current)
+		var next []string
+		for _, name := range current {
+			nd := g.nodes[name]
+			if nd == nil {
+				continue
+			}
+			for _, target := range resolve(nd) {
+				indeg[target]--
+				if indeg[target] == 0 {
+					next = append(next, target)
+				}
+			}
+		}
+		current = next
+	}
+
+	return levels
+}
+
 func (g *Graph) nodeNames(n *Node) []string {
 	if n == nil {
 		return nil

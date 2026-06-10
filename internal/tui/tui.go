@@ -377,6 +377,8 @@ func stateIndicator(state string) string {
 	switch state {
 	case "running":
 		return styleRunning.Render("●")
+	case "building":
+		return styleStarting.Render("◎")
 	case "starting", "probing":
 		return styleStarting.Render("◌")
 	case "crashed":
@@ -412,5 +414,3 @@ func (m *model) windowTitle() string {
 	}
 	return fmt.Sprintf("%d/%d invincible", running, total)
 }
-
-

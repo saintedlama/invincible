@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
@@ -30,11 +31,11 @@ type ProcessConfig struct {
 	RestartDelay    string            `toml:"restart_delay"`
 	ShutdownTimeout string            `toml:"shutdown_timeout"`
 	// File watching + auto-rebuild (opt-in)
-	Watch        []string `toml:"watch"`         // directories to watch for changes
-	WatchInclude []string `toml:"watch_include"` // file glob patterns to react to, e.g. ["*.go"]
-	WatchExclude []string `toml:"watch_exclude"` // directories to exclude from watching, e.g. ["tmp","vendor"]
-	Build        string   `toml:"build"`         // command to run before restarting, e.g. "go build ./..."
-	WatchDebounce string  `toml:"watch_debounce"` // debounce delay, default "500ms"
+	Watch         []string `toml:"watch"`          // directories to watch for changes
+	WatchInclude  []string `toml:"watch_include"`  // file glob patterns to react to, e.g. ["*.go"]
+	WatchExclude  []string `toml:"watch_exclude"`  // directories to exclude from watching, e.g. ["tmp","vendor"]
+	Build         string   `toml:"build"`          // command to run before restarting, e.g. "go build ./..."
+	WatchDebounce string   `toml:"watch_debounce"` // debounce delay, default "500ms"
 }
 
 type Config struct {
@@ -102,7 +103,7 @@ func checkDependencies(processes []ProcessConfig) error {
 		}
 	}
 
-	// DFS cycle detection.
+	// DFS cycle detection with path tracking for clear error messages.
 	type mark int
 	const (
 		unvisited mark = iota
@@ -114,21 +115,31 @@ func checkDependencies(processes []ProcessConfig) error {
 		deps[p.Name] = p.DependsOn
 	}
 	state := make(map[string]mark, len(processes))
+	var path []string
 
 	var visit func(name string) error
 	visit = func(name string) error {
 		switch state[name] {
 		case visiting:
+			// Find where the cycle starts in the current path.
+			for i, n := range path {
+				if n == name {
+					cycle := append(path[i:], name)
+					return fmt.Errorf("dependency cycle: %s", strings.Join(cycle, " → "))
+				}
+			}
 			return fmt.Errorf("dependency cycle detected at %q", name)
 		case done:
 			return nil
 		}
 		state[name] = visiting
+		path = append(path, name)
 		for _, dep := range deps[name] {
 			if err := visit(dep); err != nil {
 				return err
 			}
 		}
+		path = path[:len(path)-1]
 		state[name] = done
 		return nil
 	}

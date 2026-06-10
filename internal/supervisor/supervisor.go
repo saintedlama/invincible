@@ -2,6 +2,7 @@ package supervisor
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os/exec"
@@ -22,6 +23,7 @@ const (
 	StateProbing
 	StateRunning
 	StateCrashed
+	StateBuilding
 )
 
 func (s State) String() string {
@@ -34,6 +36,8 @@ func (s State) String() string {
 		return "running"
 	case StateCrashed:
 		return "crashed"
+	case StateBuilding:
+		return "building"
 	default:
 		return "stopped"
 	}
@@ -71,10 +75,10 @@ type ProcessStatus struct {
 }
 
 type Supervisor struct {
-	mu         sync.RWMutex
-	processes  map[string]*process
-	order      []string    // insertion order from config, used for display
-	g          *graph.Graph // dependency graph
+	mu        sync.RWMutex
+	processes map[string]*process
+	order     []string     // insertion order from config, used for display
+	g         *graph.Graph // dependency graph
 }
 
 func New(cfgs []config.ProcessConfig) *Supervisor {
@@ -224,7 +228,7 @@ func (s *Supervisor) stopProcess(p *process, reason string) error {
 	case <-done:
 	case <-time.After(p.cfg.ShutdownTimeoutDuration()):
 		s.logEvent(p, "shutdown timeout, killing")
-		killProcessGroup(cmd)
+		KillProcessGroup(cmd)
 		select {
 		case <-done:
 		case <-time.After(2 * time.Second):
@@ -273,110 +277,124 @@ func (s *Supervisor) Restart(name string) error {
 	return nil
 }
 
-func (s *Supervisor) StartAll() {
+// Build runs a build command for the named process. The process must be
+// running. Log output is written to the process's invincible log stream.
+// If ctx is cancelled, the build command is killed and the state reverts.
+func (s *Supervisor) Build(name, buildCmd, cwd string, ctx context.Context) error {
 	s.mu.RLock()
-	order := s.order
-	processes := s.processes
+	p := s.processes[name]
 	s.mu.RUnlock()
-
-	// ready[name] is closed when name has reached StateRunning (or failed to start).
-	ready := make(map[string]chan struct{}, len(order))
-	for _, name := range order {
-		ready[name] = make(chan struct{})
+	if p == nil {
+		return fmt.Errorf("unknown process: %s", name)
 	}
 
-	var wg sync.WaitGroup
-	for _, name := range order {
-		wg.Add(1)
-		go func(name string) {
-			defer wg.Done()
-			defer close(ready[name])
-
-			p := processes[name]
-
-			for _, depName := range p.cfg.DependsOn {
-				<-ready[depName]
-				dep := processes[depName]
-				dep.mu.Lock()
-				state := dep.state
-				dep.mu.Unlock()
-				if state != StateRunning {
-					s.logEvent(p, fmt.Sprintf("dependency %s not ready, skipping", depName))
-					return
-				}
-			}
-
-			if err := s.startProcess(p); err != nil {
-				return
-			}
-
-			// Wait until StateRunning (push-based via p.running).
-			p.mu.Lock()
-			running := p.running
-			state := p.state
-			p.mu.Unlock()
-
-			if state == StateRunning {
-				return
-			}
-			if running != nil {
-				select {
-				case <-running:
-				case <-time.After(30 * time.Second):
-				}
-			}
-		}(name)
+	p.mu.Lock()
+	if p.state != StateRunning && p.state != StateBuilding {
+		p.mu.Unlock()
+		return fmt.Errorf("cannot build: process is %s", p.state.String())
 	}
-	wg.Wait()
+	p.state = StateBuilding
+	p.mu.Unlock()
+
+	cmd := ShellCommand(buildCmd)
+	if cwd != "" {
+		cmd.Dir = cwd
+	}
+	cmd.Stdout = &logWriter{sup: s, name: name, prefix: "build: "}
+	cmd.Stderr = &logWriter{sup: s, name: name, prefix: "build: "}
+	if err := cmd.Start(); err != nil {
+		p.mu.Lock()
+		if p.state == StateBuilding {
+			p.state = StateRunning
+		}
+		p.mu.Unlock()
+		s.Log(name, "build: failed to start: "+err.Error())
+		return err
+	}
+	s.Log(name, "build: running...")
+
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+
+	var buildErr error
+	select {
+	case buildErr = <-done:
+	case <-ctx.Done():
+		s.Log(name, "build: cancelled")
+		KillProcessGroup(cmd)
+		<-done
+		buildErr = ctx.Err()
+	}
+
+	p.mu.Lock()
+	if p.state == StateBuilding {
+		p.state = StateRunning
+	}
+	p.mu.Unlock()
+	return buildErr
 }
 
-// RestartAll restarts every process in dependency order, waiting for each
-// dependency to become running before restarting its dependents.
-func (s *Supervisor) RestartAll() {
+// logWriter implements io.Writer, splitting output into lines and writing
+// each to the supervisor's invincible log stream.
+type logWriter struct {
+	sup    *Supervisor
+	name   string
+	prefix string
+	buf    []byte
+}
+
+func (w *logWriter) Write(p []byte) (int, error) {
+	w.buf = append(w.buf, p...)
+	for {
+		i := indexByte(w.buf, '\n')
+		if i == -1 {
+			break
+		}
+		line := string(w.buf[:i])
+		w.buf = w.buf[i+1:]
+		if line != "" {
+			w.sup.Log(w.name, w.prefix+line)
+		}
+	}
+	return len(p), nil
+}
+
+// indexByte returns the index of the first occurrence of b in s, or -1.
+func indexByte(s []byte, b byte) int {
+	for i, c := range s {
+		if c == b {
+			return i
+		}
+	}
+	return -1
+}
+
+func (s *Supervisor) StartAll() {
 	s.mu.RLock()
-	order := s.order
 	processes := s.processes
+	levels := s.g.StartLevels()
 	s.mu.RUnlock()
 
-	ready := make(map[string]chan struct{}, len(order))
-	for _, name := range order {
-		ready[name] = make(chan struct{})
-	}
+	for _, level := range levels {
+		var wg sync.WaitGroup
+		for _, name := range level {
+			wg.Add(1)
+			go func(name string) {
+				defer wg.Done()
+				s.startProcess(processes[name]) //nolint
+			}(name)
+		}
+		wg.Wait()
 
-	var wg sync.WaitGroup
-	for _, name := range order {
-		wg.Add(1)
-		go func(name string) {
-			defer wg.Done()
-			defer close(ready[name])
-
+		// Wait for every process in this level to reach running (or time out).
+		for _, name := range level {
 			p := processes[name]
-
-			for _, depName := range p.cfg.DependsOn {
-				<-ready[depName]
-				dep := processes[depName]
-				dep.mu.Lock()
-				state := dep.state
-				dep.mu.Unlock()
-				if state != StateRunning {
-					s.logEvent(p, fmt.Sprintf("dependency %s not ready, skipping", depName))
-					return
-				}
-			}
-
-			s.stopProcess(p, "restart") //nolint
-
-			if err := s.startProcess(p); err != nil {
-				return
-			}
-
 			p.mu.Lock()
 			running := p.running
 			state := p.state
 			p.mu.Unlock()
-
-			if state == StateRunning {
-				return
+			if state == StateRunning || state == StateCrashed {
+				continue
 			}
 			if running != nil {
 				select {
@@ -384,26 +402,66 @@ func (s *Supervisor) RestartAll() {
 				case <-time.After(30 * time.Second):
 				}
 			}
-		}(name)
+		}
 	}
-	wg.Wait()
+}
+
+// RestartAll restarts every process in dependency order. Each level starts
+// after the previous level has reached running.
+func (s *Supervisor) RestartAll() {
+	s.mu.RLock()
+	processes := s.processes
+	levels := s.g.StartLevels()
+	s.mu.RUnlock()
+
+	for _, level := range levels {
+		var wg sync.WaitGroup
+		for _, name := range level {
+			wg.Add(1)
+			go func(name string) {
+				defer wg.Done()
+				s.stopProcess(processes[name], "restart") //nolint
+				s.startProcess(processes[name])           //nolint
+			}(name)
+		}
+		wg.Wait()
+
+		for _, name := range level {
+			p := processes[name]
+			p.mu.Lock()
+			running := p.running
+			state := p.state
+			p.mu.Unlock()
+			if state == StateRunning || state == StateCrashed {
+				continue
+			}
+			if running != nil {
+				select {
+				case <-running:
+				case <-time.After(30 * time.Second):
+				}
+			}
+		}
+	}
 }
 
 func (s *Supervisor) StopAll() {
 	s.mu.RLock()
-	order := s.order
 	processes := s.processes
+	levels := s.g.StopLevels()
 	s.mu.RUnlock()
 
-	var wg sync.WaitGroup
-	for _, name := range order {
-		wg.Add(1)
-		go func(name string) {
-			defer wg.Done()
-			s.stopProcess(processes[name], "") //nolint
-		}(name)
+	for _, level := range levels {
+		var wg sync.WaitGroup
+		for _, name := range level {
+			wg.Add(1)
+			go func(name string) {
+				defer wg.Done()
+				s.stopProcess(processes[name], "") //nolint
+			}(name)
+		}
+		wg.Wait()
 	}
-	wg.Wait()
 }
 
 // cascadePortChange BFS-restarts every process that (transitively) depends on
@@ -420,7 +478,7 @@ func (s *Supervisor) cascadePortChange(changedName string) {
 		p.mu.Unlock()
 
 		s.stopProcess(p, "dependency port changed") //nolint
-		s.startProcess(p)                            //nolint
+		s.startProcess(p)                           //nolint
 
 		p.mu.Lock()
 		newPort := p.assignedPort

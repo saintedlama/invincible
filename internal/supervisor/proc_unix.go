@@ -21,7 +21,7 @@ func termProcessGroup(cmd *exec.Cmd) {
 	}
 }
 
-func killProcessGroup(cmd *exec.Cmd) {
+func KillProcessGroup(cmd *exec.Cmd) {
 	if cmd.Process != nil {
 		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) //nolint
 	}
