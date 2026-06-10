@@ -286,6 +286,10 @@ func renderProcessInfo(s supervisor.ProcessStatus) string {
 		kv("cwd", s.Cwd)
 	}
 
+	if s.Watching {
+		kv("watch", "on")
+	}
+
 	stateStr := s.State
 	if s.PID > 0 {
 		stateStr = fmt.Sprintf("%s  (PID %d)", s.State, s.PID)

@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -10,6 +13,7 @@ import (
 	"github.com/saintedlama/invincible/internal/config"
 	"github.com/saintedlama/invincible/internal/supervisor"
 	"github.com/saintedlama/invincible/internal/tui"
+	"github.com/saintedlama/invincible/internal/watcher"
 )
 
 var cfgFile string
@@ -63,6 +67,50 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	}()
 
 	go sup.StartAll()
+
+	watcherCtx, watcherCancel := context.WithCancel(context.Background())
+	defer watcherCancel()
+	for _, p := range cfg.Processes {
+		if len(p.Watch) == 0 || p.Build == "" {
+			continue
+		}
+		proc := p
+		name := proc.Name
+
+		watchDirs := proc.Watch
+		if proc.Cwd != "" {
+			watchDirs = make([]string, len(proc.Watch))
+			for i, d := range proc.Watch {
+				watchDirs[i] = filepath.Join(proc.Cwd, d)
+			}
+		}
+
+		onBuild := func() error {
+			cmd := supervisor.ShellCommand(proc.Build)
+			if proc.Cwd != "" {
+				cmd.Dir = proc.Cwd
+			}
+			out, err := cmd.CombinedOutput()
+			for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+				if line != "" {
+					sup.Log(name, "build: "+line)
+				}
+			}
+			return err
+		}
+
+		onRestart := func() error {
+			return sup.Restart(name)
+		}
+
+		logFn := func(msg string) {
+			sup.Log(name, msg)
+		}
+
+		debounce := proc.WatchDebounceDuration()
+		w := watcher.New(watchDirs, proc.WatchInclude, proc.WatchExclude, debounce, onBuild, onRestart, logFn)
+		go w.Run(watcherCtx)
+	}
 
 	noTUI, _ := cmd.Flags().GetBool("no-tui")
 	if noTUI {

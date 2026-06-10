@@ -7,7 +7,7 @@ import (
 	"syscall"
 )
 
-func shellCommand(cmdStr string) *exec.Cmd {
+func ShellCommand(cmdStr string) *exec.Cmd {
 	return exec.Command("sh", "-c", cmdStr)
 }
 

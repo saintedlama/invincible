@@ -33,13 +33,17 @@ cwd = "./backend"
 port = 8080
 # port_env = "PORT"          # env var name for this process's own port (default: PORT)
 # restart_delay = "500ms"    # wait before restarting a crashed process
-# shutdown_timeout = "5s"    # SIGTERM grace period before SIGKILL (default: 5s)
+# shutdown_timeout = "500ms" # SIGTERM grace period before SIGKILL
+# watch = ["."]              # directories to watch for file changes
+# watch_include = ["*.go"]   # file glob patterns to react to (default: all files)
+# watch_exclude = ["tmp", "vendor", ".git"]  # directories to skip
+# watch_debounce = "500ms"   # wait for quiet period before rebuilding
+# build = "go build ./..."   # command to run before restarting (required with watch)
 
 [[process]]
 name = "worker"
 cmd = "go run ./cmd/worker"
-# port omitted → Invincible assigns an arbitrary free port
-# no_port = true          # uncomment to disable port assignment entirely
+# no_port = true             # disable port assignment entirely
 `
 
 func runInit(_ *cobra.Command, _ []string) error {

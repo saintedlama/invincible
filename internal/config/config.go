@@ -11,6 +11,7 @@ import (
 
 const DefaultRestartDelay = 500 * time.Millisecond
 const DefaultShutdownTimeout = 500 * time.Millisecond
+const DefaultWatchDebounce = 500 * time.Millisecond
 
 type Project struct {
 	Name    string `toml:"name"`
@@ -28,6 +29,12 @@ type ProcessConfig struct {
 	Env             map[string]string `toml:"env"`
 	RestartDelay    string            `toml:"restart_delay"`
 	ShutdownTimeout string            `toml:"shutdown_timeout"`
+	// File watching + auto-rebuild (opt-in)
+	Watch        []string `toml:"watch"`         // directories to watch for changes
+	WatchInclude []string `toml:"watch_include"` // file glob patterns to react to, e.g. ["*.go"]
+	WatchExclude []string `toml:"watch_exclude"` // directories to exclude from watching, e.g. ["tmp","vendor"]
+	Build        string   `toml:"build"`         // command to run before restarting, e.g. "go build ./..."
+	WatchDebounce string  `toml:"watch_debounce"` // debounce delay, default "500ms"
 }
 
 type Config struct {
@@ -66,6 +73,14 @@ func Load(path string) (*Config, error) {
 			cfg.Processes[i].ShutdownTimeout = DefaultShutdownTimeout.String()
 		} else if _, err := time.ParseDuration(p.ShutdownTimeout); err != nil {
 			return nil, fmt.Errorf("process %q invalid shutdown_timeout %q: %w", p.Name, p.ShutdownTimeout, err)
+		}
+		if len(p.Watch) > 0 && p.Build == "" {
+			return nil, fmt.Errorf("process %q has watch dirs but no build command", p.Name)
+		}
+		if p.WatchDebounce == "" {
+			cfg.Processes[i].WatchDebounce = DefaultWatchDebounce.String()
+		} else if _, err := time.ParseDuration(p.WatchDebounce); err != nil {
+			return nil, fmt.Errorf("process %q invalid watch_debounce %q: %w", p.Name, p.WatchDebounce, err)
 		}
 	}
 	if err := checkDependencies(cfg.Processes); err != nil {
@@ -135,5 +150,11 @@ func (p ProcessConfig) RestartDelayDuration() time.Duration {
 // ShutdownTimeoutDuration parses and returns the graceful shutdown timeout.
 func (p ProcessConfig) ShutdownTimeoutDuration() time.Duration {
 	d, _ := time.ParseDuration(p.ShutdownTimeout) // already validated by Load
+	return d
+}
+
+// WatchDebounceDuration parses and returns the watch debounce delay.
+func (p ProcessConfig) WatchDebounceDuration() time.Duration {
+	d, _ := time.ParseDuration(p.WatchDebounce) // already validated by Load
 	return d
 }

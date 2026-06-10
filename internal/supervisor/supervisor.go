@@ -66,6 +66,7 @@ type ProcessStatus struct {
 	DependsOn []string
 	Restarts  int
 	StartedAt time.Time
+	Watching  bool
 }
 
 type Supervisor struct {
@@ -126,7 +127,7 @@ func (s *Supervisor) startProcess(p *process) error {
 		p.assignedPort = port
 	}
 
-	cmd := shellCommand(p.cfg.Cmd)
+	cmd := ShellCommand(p.cfg.Cmd)
 	setProcessGroupAttr(cmd)
 	if p.cfg.Cwd != "" {
 		cmd.Dir = p.cfg.Cwd
@@ -469,6 +470,7 @@ func (s *Supervisor) Status() []ProcessStatus {
 			DependsOn: p.cfg.DependsOn,
 			Restarts:  p.restarts,
 			StartedAt: p.startedAt,
+			Watching:  len(p.cfg.Watch) > 0 && p.cfg.Build != "",
 		})
 		p.mu.Unlock()
 	}
@@ -486,6 +488,17 @@ func (s *Supervisor) Logs(name string, n int) []LogEntry {
 }
 
 func (s *Supervisor) logEvent(p *process, message string) {
+	p.logs.write(message, "invincible")
+}
+
+// Log writes a message to a process's invincible log stream.
+func (s *Supervisor) Log(name, message string) {
+	s.mu.RLock()
+	p := s.processes[name]
+	s.mu.RUnlock()
+	if p == nil {
+		return
+	}
 	p.logs.write(message, "invincible")
 }
 

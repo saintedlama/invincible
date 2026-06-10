@@ -10,7 +10,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func shellCommand(cmdStr string) *exec.Cmd {
+func ShellCommand(cmdStr string) *exec.Cmd {
 	if sh, err := exec.LookPath("sh"); err == nil {
 		return exec.Command(sh, "-c", cmdStr)
 	}
