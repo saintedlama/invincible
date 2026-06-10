@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/saintedlama/invincible/internal/config"
+	"github.com/saintedlama/invincible/internal/graph"
 	"github.com/saintedlama/invincible/internal/ports"
 )
 
@@ -72,28 +73,22 @@ type ProcessStatus struct {
 type Supervisor struct {
 	mu         sync.RWMutex
 	processes  map[string]*process
-	order      []string            // insertion order from config, used for display
-	dependents map[string][]string // reversed graph: name → processes that depend on it
+	order      []string    // insertion order from config, used for display
+	g          *graph.Graph // dependency graph
 }
 
 func New(cfgs []config.ProcessConfig) *Supervisor {
 	s := &Supervisor{
-		processes:  make(map[string]*process),
-		order:      make([]string, 0, len(cfgs)),
-		dependents: make(map[string][]string, len(cfgs)),
+		processes: make(map[string]*process),
+		order:     make([]string, 0, len(cfgs)),
 	}
-	for _, c := range cfgs {
+	edges := make([]graph.Edge, len(cfgs))
+	for i, c := range cfgs {
 		s.processes[c.Name] = &process{cfg: c}
 		s.order = append(s.order, c.Name)
-		if _, ok := s.dependents[c.Name]; !ok {
-			s.dependents[c.Name] = nil
-		}
+		edges[i] = graph.Edge{Name: c.Name, Deps: c.DependsOn}
 	}
-	for _, c := range cfgs {
-		for _, dep := range c.DependsOn {
-			s.dependents[dep] = append(s.dependents[dep], c.Name)
-		}
-	}
+	s.g = graph.New(edges)
 	return s
 }
 
@@ -415,40 +410,25 @@ func (s *Supervisor) StopAll() {
 // changedName, but only if each restarted process also gets a new port.
 func (s *Supervisor) cascadePortChange(changedName string) {
 	s.mu.RLock()
-	dependents := s.dependents
 	processes := s.processes
 	s.mu.RUnlock()
 
-	queue := []string{changedName}
-	seen := map[string]bool{changedName: true}
+	s.g.WalkDependents(changedName, func(depName string) bool {
+		p := processes[depName]
+		p.mu.Lock()
+		oldPort := p.assignedPort
+		p.mu.Unlock()
 
-	for len(queue) > 0 {
-		name := queue[0]
-		queue = queue[1:]
+		s.stopProcess(p, "dependency port changed") //nolint
+		s.startProcess(p)                            //nolint
 
-		for _, depName := range dependents[name] {
-			if seen[depName] {
-				continue
-			}
-			seen[depName] = true
+		p.mu.Lock()
+		newPort := p.assignedPort
+		p.mu.Unlock()
 
-			p := processes[depName]
-			p.mu.Lock()
-			oldPort := p.assignedPort
-			p.mu.Unlock()
-
-			s.stopProcess(p, fmt.Sprintf("dependency %s port changed", name)) //nolint
-			s.startProcess(p)                                                 //nolint
-
-			p.mu.Lock()
-			newPort := p.assignedPort
-			p.mu.Unlock()
-
-			if oldPort != 0 && newPort != 0 && newPort != oldPort {
-				queue = append(queue, depName)
-			}
-		}
-	}
+		// Only cascade further if this process also got a new port.
+		return oldPort != 0 && newPort != 0 && newPort != oldPort
+	})
 }
 
 func (s *Supervisor) Status() []ProcessStatus {

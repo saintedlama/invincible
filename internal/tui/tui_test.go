@@ -20,6 +20,8 @@ type stubSup struct {
 func (s *stubSup) Start(name string) error                       { s.started = name; return nil }
 func (s *stubSup) Stop(name string) error                        { s.stopped = name; return nil }
 func (s *stubSup) Restart(name string) error                     { s.restarted = name; return nil }
+func (s *stubSup) StartAll()                                     {}
+func (s *stubSup) StopAll()                                      {}
 func (s *stubSup) RestartAll()                                   {}
 func (s *stubSup) Status() []supervisor.ProcessStatus            { return s.statuses }
 func (s *stubSup) Logs(name string, _ int) []supervisor.LogEntry { return s.logs[name] }

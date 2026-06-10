@@ -16,6 +16,8 @@ type supervisorIface interface {
 	Start(name string) error
 	Stop(name string) error
 	Restart(name string) error
+	StartAll()
+	StopAll()
 	RestartAll()
 	Status() []supervisor.ProcessStatus
 	Logs(name string, n int) []supervisor.LogEntry
@@ -151,14 +153,20 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loadLogs()
 				m.vp.GotoBottom()
 			}
+		case shift && msg.Code == 's':
+			m.sup.StartAll()
 		case msg.Code == 's':
 			if len(m.statuses) > 0 {
 				m.sup.Start(m.statuses[m.cursor].Name) //nolint
 			}
+		case shift && msg.Code == 'x':
+			m.sup.StopAll()
 		case msg.Code == 'x':
 			if len(m.statuses) > 0 {
 				m.sup.Stop(m.statuses[m.cursor].Name) //nolint
 			}
+		case shift && msg.Code == 'r':
+			m.sup.RestartAll()
 		case msg.Code == 'r':
 			if len(m.statuses) > 0 {
 				m.sup.Restart(m.statuses[m.cursor].Name) //nolint
@@ -354,7 +362,7 @@ func (m *model) renderHelpPanel(contentW int) string {
 	if m.apiAddr != "" {
 		parts = append(parts, styleAPI.Render("API http://"+m.apiAddr))
 	}
-	parts = append(parts, styleHelp.Render("↑/↓ navigate  s start  x stop  r restart  Shift+↑/↓ PgUp/PgDn scroll  q quit"))
+	parts = append(parts, styleHelp.Render("↑/↓ nav  s/x/r process  S/X/R all  scroll  q quit"))
 	parts = append(parts, styleInvincible.Render("f filter ("+filterLabels[m.filterMode]+")"))
 	return panelStyle.Width(contentW).Render(strings.Join(parts, "   "))
 }
