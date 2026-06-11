@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	"github.com/spf13/cobra"
 
@@ -45,12 +48,18 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// api-addr precedence: flag > config file (project.api_addr) > default :7777
+	// api-addr precedence: flag > config file (project.api_addr) >
+	// path-hashed offset from :7777 (avoids collisions across worktrees).
 	addr := ":7777"
-	if cmd.Flags().Changed("api-addr") {
+	addrFromFlag := cmd.Flags().Changed("api-addr")
+	if addrFromFlag {
 		addr, _ = cmd.Flags().GetString("api-addr")
 	} else if cfg.Project.APIAddr != "" {
 		addr = cfg.Project.APIAddr
+	} else {
+		dir, _ := filepath.Abs(filepath.Dir(cfgFile))
+		offset := pathOffset(dir)
+		addr = fmt.Sprintf(":%d", 7777+offset)
 	}
 
 	sup := supervisor.New(cfg.Processes)
@@ -64,6 +73,11 @@ func runRoot(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(os.Stderr, "api: %v\n", err)
 		}
 	}()
+
+	// Write .invincible.port so agents can discover this instance.
+	portFile := portFilePath()
+	os.WriteFile(portFile, []byte(srv.Addr()), 0644) //nolint
+	defer os.Remove(portFile)
 
 	go sup.StartAll()
 
@@ -104,7 +118,11 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	noTUI, _ := cmd.Flags().GetBool("no-tui")
 	if noTUI {
 		fmt.Printf("http://%s\n", srv.Addr())
-		select {}
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+		<-sig
+		sup.StopAll()
+		return nil
 	}
 
 	p := tui.New(sup, srv.Addr())
@@ -114,4 +132,20 @@ func runRoot(cmd *cobra.Command, args []string) error {
 
 	sup.StopAll()
 	return nil
+}
+
+// portFilePath returns the path to .invincible.port, located next to the config file.
+func portFilePath() string {
+	dir := filepath.Dir(cfgFile)
+	return filepath.Join(dir, ".invincible.port")
+}
+
+// pathOffset returns a deterministic offset in [0, 9999] derived from the
+// absolute directory path. Multiple worktrees with different paths get
+// different offsets, so each invincible instance tries a different API port
+// first instead of all colliding on :7777.
+func pathOffset(dir string) int {
+	h := fnv.New32a()
+	h.Write([]byte(dir))
+	return int(h.Sum32() % 10000)
 }

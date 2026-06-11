@@ -21,3 +21,6 @@ dist/
 # agent stuff
 .claude/
 tmp/
+
+# invincible runtime
+.invincible.port

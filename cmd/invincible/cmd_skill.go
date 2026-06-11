@@ -37,12 +37,21 @@ use to inspect and control processes programmatically.
 
 ## Finding the API address
 
-Default: http://127.0.0.1:7777
+Primary: Read .invincible.port in the project root. It contains the bound
+address (e.g. 127.0.0.1:7777) and is written on startup, removed on shutdown.
+
+When no explicit api_addr is configured, Invincible derives a deterministic
+port from the project directory path (hash-based offset from 7777). This means
+each worktree gets its own preferred port, avoiding collisions.
+
 Override in config:  api_addr = ":8888"   (under [project])
 Override at runtime: invincible --api-addr :8888
 
-In --no-tui mode the actual address is printed to stdout on startup.
-The API always binds 127.0.0.1 and probes for a free port if the preferred one is taken.
+The API always binds 127.0.0.1. If the preferred port is taken it falls back
+to an OS-assigned ephemeral port.
+
+When multiple invincible instances run (e.g. across git worktrees), each has its
+own .invincible.port file — always read it from the project root you are working in.
 
 ## Endpoints
 
