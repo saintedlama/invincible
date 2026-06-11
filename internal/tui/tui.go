@@ -2,8 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"slices"
-	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/viewport"
@@ -35,16 +33,20 @@ var (
 	styleInvincible = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	styleAPI        = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 	styleLabel      = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	styleInfo       = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	panelStyle      = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("8"))
 	detailPanelStyle = panelStyle.Padding(0, 1, 1, 1)
-	styleInfo       = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 )
 
 const (
 	leftContentW = 28
-	helpPanelH   = 3
+)
+
+const (
+	screenDashboard = iota
+	screenLogs
 )
 
 const (
@@ -64,9 +66,11 @@ type model struct {
 	statuses   []supervisor.ProcessStatus
 	cursor     int
 	filterMode int
+	screen     int
 	vp         viewport.Model
 	width      int
 	height     int
+	helpH      int
 	lastWheel  time.Time
 }
 
@@ -91,6 +95,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		m.statuses = m.sup.Status()
+		if m.cursor >= len(m.statuses) {
+			m.cursor = max(len(m.statuses)-1, 0)
+		}
 		if len(m.statuses) > 0 {
 			atBottom := m.vp.AtBottom()
 			m.loadLogs()
@@ -106,25 +113,30 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.lastWheel = time.Now()
-		if mouse.Y >= m.height-helpPanelH {
+		if mouse.Y >= m.height-m.helpH {
 			return m, nil
 		}
-		if mouse.X < leftContentW {
-			if mouse.Button == tea.MouseWheelUp && m.cursor > 0 {
-				m.cursor--
-				m.loadLogs()
-				m.vp.GotoBottom()
-			} else if mouse.Button == tea.MouseWheelDown && m.cursor < len(m.statuses)-1 {
-				m.cursor++
-				m.loadLogs()
-				m.vp.GotoBottom()
-			}
-		} else {
+
+		switch m.screen {
+		case screenLogs:
 			switch mouse.Button {
 			case tea.MouseWheelUp:
 				m.vp.ScrollUp(1)
 			case tea.MouseWheelDown:
 				m.vp.ScrollDown(1)
+			}
+
+		default:
+			if mouse.X < leftContentW {
+				if mouse.Button == tea.MouseWheelUp && m.cursor > 0 {
+					m.cursor--
+					m.loadLogs()
+					m.vp.GotoBottom()
+				} else if mouse.Button == tea.MouseWheelDown && m.cursor < len(m.statuses)-1 {
+					m.cursor++
+					m.loadLogs()
+					m.vp.GotoBottom()
+				}
 			}
 		}
 
@@ -132,6 +144,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		shift := msg.Mod&tea.ModShift != 0
 		ctrl := msg.Mod&tea.ModCtrl != 0
 		switch {
+		case msg.Code == tea.KeyTab:
+			m.screen = (m.screen + 1) % 2
+
 		case shift && msg.Code == tea.KeyUp:
 			m.vp.ScrollUp(1)
 		case shift && msg.Code == tea.KeyDown:
@@ -140,8 +155,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.vp.PageUp()
 		case msg.Code == tea.KeyPgDown:
 			m.vp.PageDown()
+
 		case msg.Code == 'q' || (ctrl && msg.Code == 'c'):
 			return m, tea.Quit
+
 		case msg.Code == tea.KeyUp || msg.Code == 'k':
 			if m.cursor > 0 {
 				m.cursor--
@@ -154,24 +171,28 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loadLogs()
 				m.vp.GotoBottom()
 			}
+
 		case shift && msg.Code == 's':
 			m.sup.StartAll()
 		case msg.Code == 's':
 			if len(m.statuses) > 0 {
 				m.sup.Start(m.statuses[m.cursor].Name) //nolint
 			}
+
 		case shift && msg.Code == 'x':
 			m.sup.StopAll()
 		case msg.Code == 'x':
 			if len(m.statuses) > 0 {
 				m.sup.Stop(m.statuses[m.cursor].Name) //nolint
 			}
+
 		case shift && msg.Code == 'r':
 			m.sup.RestartAll()
 		case msg.Code == 'r':
 			if len(m.statuses) > 0 {
 				m.sup.Restart(m.statuses[m.cursor].Name) //nolint
 			}
+
 		case msg.Code == 'f':
 			m.filterMode = (m.filterMode + 1) % len(filterLabels)
 			m.loadLogs()
@@ -215,18 +236,17 @@ func (m *model) View() tea.View {
 		return tea.NewView("loading...")
 	}
 
-	mainH := m.height - helpPanelH
-	rightPanelW := max(m.width-leftContentW, 1)
+	helpBar := m.renderHelpBar()
+	m.helpH = lipgloss.Height(helpBar)
+	mainH := m.height - m.helpH
 
-	top := lipgloss.JoinHorizontal(lipgloss.Top,
-		m.renderProcessPanel(leftContentW, mainH),
-		m.renderDetailPanel(rightPanelW, mainH),
-	)
-
-	body := lipgloss.JoinVertical(lipgloss.Left,
-		top,
-		m.renderHelpPanel(m.width),
-	)
+	var body string
+	switch m.screen {
+	case screenLogs:
+		body = m.renderLogsScreen(mainH, helpBar)
+	default:
+		body = m.renderDashboard(mainH, helpBar)
+	}
 
 	v := tea.NewView(body)
 	v.AltScreen = true
@@ -235,178 +255,32 @@ func (m *model) View() tea.View {
 	return v
 }
 
-func (m *model) renderProcessPanel(contentW, totalH int) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Processes"))
-	for i, s := range m.statuses {
-		dot := stateIndicator(s.State)
-		name := s.Name
-		prefix := "   "
-		if i == m.cursor {
-			name = styleSelected.Render(name)
-			prefix = " > "
-		}
-		port := ""
-		if s.Port > 0 {
-			port = " " + styleInfo.Render(fmt.Sprintf(":%d", s.Port))
-		}
-		fmt.Fprintf(&sb, "%s%s %s%s\n", prefix, dot, name, port)
-	}
-	return panelStyle.Width(contentW).Height(totalH).Render(sb.String())
+func (m *model) renderDashboard(mainH int, helpBar string) string {
+	rightPanelW := max(m.width-leftContentW, 1)
+
+	top := lipgloss.JoinHorizontal(lipgloss.Top,
+		m.renderProcessPanel(leftContentW, mainH),
+		m.renderInfoPanel(rightPanelW, mainH),
+	)
+
+	return lipgloss.JoinVertical(lipgloss.Left,
+		top,
+		helpBar,
+	)
 }
 
-func (m *model) renderDetailPanel(contentW, totalH int) string {
-	if len(m.statuses) == 0 {
-		return detailPanelStyle.Width(contentW).Height(totalH).Render("")
-	}
-	s := m.statuses[m.cursor]
-
-	infoContent := renderProcessInfo(s)
-	infoLines := strings.Count(infoContent, "\n") + 1
-	// content_lines + border_top(1) + border_bottom(1) + padding_bottom(1) = infoLines+3
-	infoPanelRendered := infoLines + 3
-	logsPanelH := totalH - infoPanelRendered
-
-	infoPanel := detailPanelStyle.Width(contentW).Height(infoPanelRendered).Render(infoContent)
-	logsPanel := m.renderLogsPanel(contentW, logsPanelH)
-
-	return lipgloss.JoinVertical(lipgloss.Left, infoPanel, logsPanel)
-}
-
-func renderProcessInfo(s supervisor.ProcessStatus) string {
-	var lines []string
-
-	showUptime := !s.StartedAt.IsZero() && (s.State == "running" || s.State == "probing")
-
-	nameLine := lipgloss.NewStyle().Bold(true).Render(s.Name)
-	if showUptime {
-		nameLine += " " + styleLabel.Render("(up "+time.Since(s.StartedAt).Truncate(time.Second).String()+")")
-	}
-	lines = append(lines, nameLine)
-	lines = append(lines, "") // blank separator
-
-	f := func(key, val string) string {
-		return fmt.Sprintf("%s  %s", styleLabel.Render(fmt.Sprintf("%-5s", key)), val)
-	}
-
-	kv := func(key, val string) {
-		lines = append(lines, f(key, val))
-	}
-
-	kv("cmd", s.Cmd)
-
-	if s.Cwd != "" {
-		kv("cwd", s.Cwd)
-	}
-
-	if s.Watching {
-		kv("watch", "on")
-	}
-
-	stateStr := s.State
-	if s.PID > 0 {
-		stateStr = fmt.Sprintf("%s  (PID %d)", s.State, s.PID)
-	}
-	kv("state", stateStr)
-
-	if s.Port > 0 || s.PortEnv != "" {
-		var parts []string
-		if s.Port > 0 {
-			parts = append(parts, f("port", fmt.Sprintf("%d", s.Port)))
-		}
-		if s.PortEnv != "" {
-			parts = append(parts, f("penv", s.PortEnv))
-		}
-		lines = append(lines, strings.Join(parts, "    "))
-	}
-
-	if s.Restarts > 0 {
-		kv("crash", fmt.Sprintf("%d", s.Restarts))
-	}
-
-	if len(s.DependsOn) > 0 {
-		kv("needs", strings.Join(s.DependsOn, ", "))
-	}
-
-	envKeys := make([]string, 0, len(s.Env))
-	for k := range s.Env {
-		envKeys = append(envKeys, k)
-	}
-	slices.Sort(envKeys)
-	for _, k := range envKeys {
-		kv("env", k+"="+s.Env[k])
-	}
-
-	return strings.Join(lines, "\n")
-}
-
-func (m *model) renderLogsPanel(contentW, totalH int) string {
-	// vp.View() returns exactly vpWidth × vpHeight chars (no trailing newline).
-	// Panel content = title(1) + blank(1) + vp.View()(vpHeight lines) = vpHeight+2 lines.
-	// Panel rendered = max(totalH, (vpHeight+2) + borders(2) + padBottom(1)) = totalH
-	// when vpHeight = totalH - 5.
-	vpHeight := max(totalH-5, 0)
-	vpWidth := max(contentW-4, 0) // contentW - borders(2) - paddingLR(2)
-	m.vp.SetWidth(vpWidth)
-	m.vp.SetHeight(vpHeight)
-
-	title := lipgloss.NewStyle().Bold(true).Render("Logs")
-	if !m.vp.AtBottom() {
-		title = styleScrolled.Render("Logs ↑")
-	}
-
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "%s\n\n", title)
-	sb.WriteString(m.vp.View())
-
-	return detailPanelStyle.Width(contentW).Height(totalH).Render(sb.String())
-}
-
-func (m *model) renderHelpPanel(contentW int) string {
-	var parts []string
-	if m.apiAddr != "" {
-		parts = append(parts, styleAPI.Render("API http://"+m.apiAddr))
-	}
-	parts = append(parts, styleHelp.Render("↑/↓ nav  s/x/r process  S/X/R all  scroll  q quit"))
-	parts = append(parts, styleInvincible.Render("f filter ("+filterLabels[m.filterMode]+")"))
-	return panelStyle.Width(contentW).Render(strings.Join(parts, "   "))
+func (m *model) renderLogsScreen(mainH int, helpBar string) string {
+	logsPanel := m.renderLogsPanel(m.width, mainH)
+	return lipgloss.JoinVertical(lipgloss.Left,
+		logsPanel,
+		helpBar,
+	)
 }
 
 func tick() tea.Cmd {
 	return tea.Tick(500*time.Millisecond, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
-}
-
-func stateIndicator(state string) string {
-	switch state {
-	case "running":
-		return styleRunning.Render("●")
-	case "building":
-		return styleStarting.Render("◎")
-	case "starting", "probing":
-		return styleStarting.Render("◌")
-	case "crashed":
-		return styleCrashed.Render("●")
-	default:
-		return styleStopped.Render("○")
-	}
-}
-
-func formatLogEntries(entries []supervisor.LogEntry) []string {
-	out := make([]string, len(entries))
-	for i, e := range entries {
-		ts := styleLabel.Render("[" + e.Time.Format("15:04:05") + "]")
-		content := e.Line
-		switch e.Source {
-		case "stderr":
-			content = styleStderr.Render(content)
-		case "invincible":
-			content = styleInvincible.Render(content)
-		}
-		out[i] = ts + " " + content
-	}
-	return out
 }
 
 func (m *model) windowTitle() string {

@@ -144,13 +144,19 @@ Flags:
 
 ### TUI key bindings
 
+Invincible has two screens — **Dashboard** (process list + details) and **Logs** (full-width). Press `Tab` to switch between them.
+
 | Key | Action |
 |---|---|
+| `Tab` | Toggle between Dashboard and Logs screens |
 | `↑` / `k` | Select previous process |
 | `↓` / `j` | Select next process |
 | `s` | Start selected process |
 | `x` | Stop selected process |
 | `r` | Restart selected process |
+| `S` (Shift+s) | Start all processes |
+| `X` (Shift+x) | Stop all processes |
+| `R` (Shift+r) | Restart all processes |
 | `f` | Cycle log filter (ALL → STDERR → STDOUT → INVINCIBLE) |
 | `Shift+↑` / `PgUp` | Scroll logs up |
 | `Shift+↓` / `PgDn` | Scroll logs down |
@@ -160,8 +166,8 @@ Flags:
 
 | Action | Area |
 |---|---|
-| Scroll wheel | Over process list: select next/previous process |
-| Scroll wheel | Over log panel: scroll logs |
+| Scroll wheel | Dashboard: over process list → select next/previous process |
+| Scroll wheel | Logs screen: scroll logs |
 
 ## CLI commands
 
