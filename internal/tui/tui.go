@@ -39,6 +39,7 @@ var (
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("8"))
 	detailPanelStyle = panelStyle.Padding(0, 1, 1, 1)
+	styleInfo       = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 )
 
 const (
@@ -240,12 +241,16 @@ func (m *model) renderProcessPanel(contentW, totalH int) string {
 	for i, s := range m.statuses {
 		dot := stateIndicator(s.State)
 		name := s.Name
+		prefix := "   "
 		if i == m.cursor {
 			name = styleSelected.Render(name)
-			fmt.Fprintf(&sb, " > %s %s\n", dot, name)
-		} else {
-			fmt.Fprintf(&sb, "   %s %s\n", dot, name)
+			prefix = " > "
 		}
+		port := ""
+		if s.Port > 0 {
+			port = " " + styleInfo.Render(fmt.Sprintf(":%d", s.Port))
+		}
+		fmt.Fprintf(&sb, "%s%s %s%s\n", prefix, dot, name, port)
 	}
 	return panelStyle.Width(contentW).Height(totalH).Render(sb.String())
 }
