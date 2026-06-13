@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.0](https://github.com/saintedlama/invincible/compare/v1.5.1...v1.6.0) (2026-06-13)
+
+
+### Features
+
+* add l and p keyboard shortcuts for quick screen switching ([57644a6](https://github.com/saintedlama/invincible/commit/57644a637dd372de12d11b9516f829c0bc1c6a9e))
+
+
+### Bug Fixes
+
+* add install or update skill ([8644c90](https://github.com/saintedlama/invincible/commit/8644c90ac1e2b3f2b8529dda6f06e77da15c866c))
+* use mouse wheel for scrolling in the processes and logs ([5b8e93f](https://github.com/saintedlama/invincible/commit/5b8e93f23cfcad2783a9707ea7df278d1104c849))
+
 ## [1.5.1](https://github.com/saintedlama/invincible/compare/v1.5.0...v1.5.1) (2026-06-13)
 
 
