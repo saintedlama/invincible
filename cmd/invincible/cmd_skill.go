@@ -20,7 +20,7 @@ func init() {
 func runSkill(_ *cobra.Command, _ []string) error {
 	fmt.Print("Paste the text below into your agent prompt to have the agent install an Invincible skill.\n\n")
 
-	fmt.Print(`Install a skill named "invincible" with the following description and API spec:
+	fmt.Print(`Install or update a skill named "invincible" with the following description and API spec:
 
 # Invincible — process manager skill
 
