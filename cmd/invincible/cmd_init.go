@@ -20,7 +20,7 @@ func init() {
 
 const initTemplate = `[project]
 name = "myapp"
-# api_addr = ":7777"  # override the Invincible API port
+# api_addr = ":7777"  # override the HTTP API port (default: path-derived offset from 7777)
 
 # Each [[process]] block defines one managed service.
 # Invincible finds a free port starting from the hint and injects it as PORT=<n>.
@@ -32,8 +32,10 @@ cmd = "go run ./cmd/api"
 cwd = "./backend"
 port = 8080
 # port_env = "PORT"          # env var name for this process's own port (default: PORT)
+# depends_on = ["worker"]    # restart this process if a dependency changes port
 # restart_delay = "500ms"    # wait before restarting a crashed process
 # shutdown_timeout = "500ms" # SIGTERM grace period before SIGKILL
+# env = { QUEUE = "default" }  # extra static env vars
 # watch = ["."]              # directories to watch for file changes
 # watch_include = ["*.go"]   # file glob patterns to react to (default: all files)
 # watch_exclude = ["tmp", "vendor", ".git"]  # directories to skip

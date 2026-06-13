@@ -69,7 +69,7 @@ GET /processes/{name}/logs?n=100&format=text
   format  – omit for JSON, use "text" for plain newline-separated output
 
 JSON response: array of log entries
-  { "time": "2026-06-04T08:22:01Z", "line": "server started", "stderr": false }
+  { "time": "2026-06-04T08:22:01Z", "line": "server started", "source": "stdout" }
 
 Plain-text response: one line per entry, no metadata (convenient for curl).
 
@@ -83,12 +83,16 @@ POST /processes/{name}/restart
 
 {
   "Name":      "api",
-  "State":     "running",       // stopped | starting | probing | running | crashed
+  "State":     "running",       // stopped | starting | probing | running | building | crashed
   "PID":       1234,            // 0 when not running
   "Cmd":       "go run ./cmd/api",
+  "Cwd":       "./backend",    // working directory
   "Port":      8080,            // assigned port (0 if no_port = true)
+  "PortEnv":   "PORT",          // env var name for this process's port
+  "DependsOn": ["worker"],      // processes this one depends on
   "Restarts":  2,               // crash-triggered restart count
   "StartedAt": "2026-06-04T08:00:00Z",
+  "Watching":  true,            // file watching enabled
   "Env":       { "QUEUE": "default" }
 }
 
@@ -98,6 +102,7 @@ stopped  – not running, either never started or deliberately stopped
 starting – OS process launched, before port check
 probing  – process is up but its port has not accepted a connection yet
 running  – process is up and port (if any) is accepting connections
+building – rebuild triggered by file watch, old process still running
 crashed  – exited unexpectedly; will be restarted after restart_delay
 
 ## Port environment variables
