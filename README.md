@@ -177,7 +177,7 @@ Create a starter `invincible.toml` in the current directory. Exits with an error
 
 ### `invincible skill`
 
-Print an agent prompt (preamble + full skill text) to paste into an AI agent session. Requires `invincible.toml` to be present so the configured process list is included.
+Print a project-agnostic agent prompt (preamble + full skill text) to paste into an AI agent session. The skill teaches the agent how to discover the API address via `.invincible.port` and how to list processes via `GET /processes` — no project-specific config is embedded.
 
 ## Working with agents across worktrees
 

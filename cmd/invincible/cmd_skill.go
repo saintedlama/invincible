@@ -4,13 +4,11 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-
-	"github.com/saintedlama/invincible/internal/config"
 )
 
 var skillCmd = &cobra.Command{
 	Use:          "skill",
-	Short:        "Print an agent prompt for installing the Invincible skill for this project",
+	Short:        "Print an agent prompt for installing the Invincible skill",
 	SilenceUsage: true,
 	RunE:         runSkill,
 }
@@ -20,12 +18,7 @@ func init() {
 }
 
 func runSkill(_ *cobra.Command, _ []string) error {
-	cfg, err := config.Load(cfgFile)
-	if err != nil {
-		return fmt.Errorf("no .invincible.toml found in the current directory — run `invincible init` to create one")
-	}
-
-	fmt.Print("Paste the text below into your agent prompt to have the agent install an Invincible skill for this project.\n\n")
+	fmt.Print("Paste the text below into your agent prompt to have the agent install an Invincible skill.\n\n")
 
 	fmt.Print(`Install a skill named "invincible" with the following description and API spec:
 
@@ -52,6 +45,12 @@ to an OS-assigned ephemeral port.
 
 When multiple invincible instances run (e.g. across git worktrees), each has its
 own .invincible.port file — always read it from the project root you are working in.
+
+## Discovering managed processes
+
+Call GET /processes to list all processes and their current state:
+  GET /processes          → array of ProcessStatus (schema below)
+  GET /processes/{name}   → single ProcessStatus or 404
 
 ## Endpoints
 
@@ -133,16 +132,6 @@ Discover which port a service was assigned:
 GET /openapi.json  →  full OpenAPI 3.0 spec
 `)
 
-	fmt.Print("\n## Processes configured in this project\n\n")
-	for _, p := range cfg.Processes {
-		port := "auto-assigned"
-		if p.NoPort {
-			port = "none"
-		} else if p.Port > 0 {
-			port = fmt.Sprintf("%d", p.Port)
-		}
-		fmt.Printf("  %-16s port: %-14s cmd: %s\n", p.Name, port, p.Cmd)
-	}
 	fmt.Println()
 	return nil
 }
