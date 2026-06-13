@@ -43,6 +43,12 @@ jobs:
             exit 1
           fi
 
+      - name: deadcode
+        run: go run golang.org/x/tools/cmd/deadcode@latest ./... 2>/dev/null || true
+
+      - name: staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+
   test:
     needs: lint
     runs-on: ${{ matrix.os }}

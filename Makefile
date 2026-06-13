@@ -7,7 +7,7 @@ else
     BIN := invincible
 endif
 
-.PHONY: build test vet lint clean run cover
+.PHONY: build test fmt vet lint clean run cover
 
 build:
 	go build $(LDFLAGS) -o $(BIN) $(CMD)
@@ -23,10 +23,18 @@ cover:
 	go tool cover -func coverage.out
 	go tool cover -html=coverage.out -o coverage.html
 
+fmt:
+	gofmt -w .
+
 vet:
 	go vet ./...
 
 lint: vet
+	@echo "=== gofmt ==="
+	@unformatted=$$(gofmt -l .); if [ -n "$$unformatted" ]; then echo "$$unformatted"; exit 1; fi
+	@echo "=== go mod tidy ==="
+	@go mod tidy
+	@if ! git diff --exit-code go.mod go.sum; then echo "go.mod or go.sum not tidy"; exit 1; fi
 	go run golang.org/x/tools/cmd/deadcode@latest ./... 2>/dev/null || true
 	go run honnef.co/go/tools/cmd/staticcheck@latest ./...
 
