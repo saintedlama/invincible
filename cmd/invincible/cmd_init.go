@@ -51,7 +51,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf(".invincible.toml already exists in the current directory")
 	}
 	if err := os.WriteFile(".invincible.toml", []byte(initTemplate), 0644); err != nil {
-		return fmt.Errorf("Error creating .invincible.toml: %w", err)
+		return fmt.Errorf("error creating .invincible.toml: %w", err)
 	}
 	fmt.Println("created .invincible.toml")
 	return nil
