@@ -127,16 +127,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		default:
-			if mouse.X < leftContentW {
-				if mouse.Button == tea.MouseWheelUp && m.cursor > 0 {
-					m.cursor--
-					m.loadLogs()
-					m.vp.GotoBottom()
-				} else if mouse.Button == tea.MouseWheelDown && m.cursor < len(m.statuses)-1 {
-					m.cursor++
-					m.loadLogs()
-					m.vp.GotoBottom()
-				}
+			if mouse.Button == tea.MouseWheelUp && m.cursor > 0 {
+				m.cursor--
+				m.loadLogs()
+				m.vp.GotoBottom()
+			} else if mouse.Button == tea.MouseWheelDown && m.cursor < len(m.statuses)-1 {
+				m.cursor++
+				m.loadLogs()
+				m.vp.GotoBottom()
 			}
 		}
 
