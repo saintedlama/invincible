@@ -47,7 +47,7 @@ Invincible looks for `invincible.toml` in the current directory by default.
 ```toml
 [project]
 name    = "myapp"
-# api_addr = ":7777"   # override the HTTP API port (default :7777)
+# api_addr = ":7777"   # override the HTTP API port (default: path-derived offset from 7777)
 
 [[process]]
 name          = "api"
@@ -203,12 +203,6 @@ When no explicit `api_addr` is configured (flag or config file), Invincible deri
 
 If the preferred port happens to be taken, Invincible falls back to an OS-assigned ephemeral port — and still records the actual address in `.invincible.port`.
 
-### Discovery checklist for agents
-
-1. **Read `.invincible.port`** — always correct, always the bound address.
-2. **Path-derived port** — each worktree gets its own preferred port, avoiding collisions.
-3. **Ephemeral fallback** — if a collision somehow occurs, `.invincible.port` still records it.
-
 Run `invincible skill` to generate an agent prompt with the full API reference and the process list from your config.
 
 ## HTTP API
@@ -244,7 +238,7 @@ The API binds to `127.0.0.1` and is only accessible locally.
 }
 ```
 
-**States:** `stopped` · `starting` · `probing` · `running` · `crashed`
+**States:** `stopped` · `starting` · `probing` · `running` · `building` · `crashed`
 
 `probing` means the process has started but its port has not yet accepted a connection. Once the port is reachable the state transitions to `running`.
 
