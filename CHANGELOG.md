@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/saintedlama/invincible/compare/v1.5.0...v1.5.1) (2026-06-13)
+
+
+### Bug Fixes
+
+* emit a project agnostic skill ([5ef68df](https://github.com/saintedlama/invincible/commit/5ef68df89a0fc06bc1ffb2ab06bf99591c181f35))
+
 ## [1.5.0](https://github.com/saintedlama/invincible/compare/v1.4.0...v1.5.0) (2026-06-13)
 
 
