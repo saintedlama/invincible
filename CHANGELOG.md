@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.5.0](https://github.com/saintedlama/invincible/compare/v1.4.0...v1.5.0) (2026-06-13)
+
+
+### Features
+
+* add overview information to the process list ([51da0a7](https://github.com/saintedlama/invincible/commit/51da0a7af43eae10f437f5b4d2f16a3b197b756c))
+* reworked layout of the tui to support smaller screens ([be029c4](https://github.com/saintedlama/invincible/commit/be029c42153ccadff25ae136305b0ed913f8cbc8))
+* support multiple instances with pid files ([cd0aa94](https://github.com/saintedlama/invincible/commit/cd0aa9423ed1b02f18cce6cbab3cd540d406c2d5))
+
+
+### Bug Fixes
+
+* update skill and init commands to match features ([c4ecee9](https://github.com/saintedlama/invincible/commit/c4ecee94c1c2c6664787b6d07327df42a281dea7))
+
 ## [1.4.0](https://github.com/saintedlama/invincible/compare/v1.3.0...v1.4.0) (2026-06-10)
 
 
