@@ -147,6 +147,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case msg.Code == tea.KeyTab:
 			m.screen = (m.screen + 1) % 2
 
+		case msg.Code == 'l':
+			m.screen = screenLogs
+		case msg.Code == 'p':
+			m.screen = screenDashboard
+
 		case shift && msg.Code == tea.KeyUp:
 			m.vp.ScrollUp(1)
 		case shift && msg.Code == tea.KeyDown:

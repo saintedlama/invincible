@@ -11,12 +11,7 @@ func (m *model) renderHelpBar() string {
 	}
 	parts = append(parts, styleHelp.Render("↑/↓ sel  s/x/r  S/X/R all"))
 
-	switch m.screen {
-	case screenLogs:
-		parts = append(parts, styleHelp.Render("Tab processes"))
-	default:
-		parts = append(parts, styleHelp.Render("Tab logs"))
-	}
+	parts = append(parts, styleHelp.Render("p processes  l logs"))
 
 	parts = append(parts, styleInvincible.Render("f:"+filterLabels[m.filterMode]))
 	parts = append(parts, styleHelp.Render("q quit"))
