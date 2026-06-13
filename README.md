@@ -6,6 +6,10 @@ A process manager for local development, written in Go.
 
 Keep services alive, restart them on crash, assign free ports automatically, wire up port dependencies, and optionally watch files for auto-rebuild — no Docker required. Comes with a terminal UI for humans and an HTTP API for agents.
 
+![Dashboard](screenshots/processes.png)
+
+![Logs](screenshots/logs.png)
+
 ## Invincible is Not
 
 - A replacement for `make`
