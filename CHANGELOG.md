@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/saintedlama/invincible/compare/v1.6.0...v1.6.1) (2026-06-15)
+
+
+### Bug Fixes
+
+* split skill and skill-spec commands for simpler agent install ([e0e2a2d](https://github.com/saintedlama/invincible/commit/e0e2a2d741030104b7c476cd26ec698a2c054e13))
+
 ## [1.6.0](https://github.com/saintedlama/invincible/compare/v1.5.1...v1.6.0) (2026-06-13)
 
 
