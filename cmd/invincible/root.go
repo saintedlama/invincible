@@ -24,7 +24,10 @@ var rootCmd = &cobra.Command{
 	Use:   "invincible",
 	Short: "Local development process manager",
 	Long: `Invincible keeps processes alive, restarts them on crash, assigns free
-ports, and exposes an HTTP API for programmatic control.`,
+ports, and exposes an HTTP API for programmatic control.
+
+On startup, writes the API address to .invincible.port in the project root
+so agents and tooling can discover it without manual configuration.`,
 	SilenceUsage: true,
 	RunE:         runRoot,
 }

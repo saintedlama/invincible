@@ -8,18 +8,33 @@ import (
 
 var skillCmd = &cobra.Command{
 	Use:          "skill",
-	Short:        "Print an agent prompt for installing the Invincible skill",
+	Short:        "Print a quick guide for installing the Invincible agent skill",
 	SilenceUsage: true,
 	RunE:         runSkill,
 }
 
+var skillSpecCmd = &cobra.Command{
+	Use:          "skill-spec",
+	Short:        "Print the full Invincible skill description for an agent to consume",
+	SilenceUsage: true,
+	RunE:         runSkillSpec,
+}
+
 func init() {
 	rootCmd.AddCommand(skillCmd)
+	rootCmd.AddCommand(skillSpecCmd)
 }
 
 func runSkill(_ *cobra.Command, _ []string) error {
-	fmt.Print("Paste the text below into your agent prompt to have the agent install an Invincible skill.\n\n")
+	fmt.Println("Paste this into your agent:")
+	fmt.Println()
+	fmt.Println("    Install or update the invincible skill — invoke `invincible skill-spec`")
+	fmt.Println("    to get the full skill description.")
+	fmt.Println()
+	return nil
+}
 
+func runSkillSpec(_ *cobra.Command, _ []string) error {
 	fmt.Print(`Install or update a skill named "invincible" with the following description and API spec:
 
 # Invincible — process manager skill
@@ -131,7 +146,5 @@ Discover which port a service was assigned:
 
 GET /openapi.json  →  full OpenAPI 3.0 spec
 `)
-
-	fmt.Println()
 	return nil
 }

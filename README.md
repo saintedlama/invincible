@@ -181,7 +181,11 @@ Create a starter `invincible.toml` in the current directory. Exits with an error
 
 ### `invincible skill`
 
-Print a project-agnostic agent prompt (preamble + full skill text) to paste into an AI agent session. The skill teaches the agent how to discover the API address via `.invincible.port` and how to list processes via `GET /processes` — no project-specific config is embedded.
+Print a quick guide telling you what to paste into an AI agent session to install the Invincible skill.
+
+### `invincible skill-spec`
+
+Print the full skill description (API reference, process schema, workflows) for an agent to consume. Invoke this after the agent has been told to install the skill via `invincible skill`.
 
 ## Working with agents across worktrees
 
@@ -207,7 +211,7 @@ When no explicit `api_addr` is configured (flag or config file), Invincible deri
 
 If the preferred port happens to be taken, Invincible falls back to an OS-assigned ephemeral port — and still records the actual address in `.invincible.port`.
 
-Run `invincible skill` to generate an agent prompt with the full API reference and the process list from your config.
+Run `invincible skill` to see how to install the Invincible agent skill, then `invincible skill-spec` for the full API reference.
 
 ## HTTP API
 
