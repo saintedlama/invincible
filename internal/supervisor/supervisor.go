@@ -13,6 +13,7 @@ import (
 	"github.com/saintedlama/invincible/internal/config"
 	"github.com/saintedlama/invincible/internal/graph"
 	"github.com/saintedlama/invincible/internal/ports"
+	"golang.org/x/sync/errgroup"
 )
 
 type State int
@@ -277,9 +278,9 @@ func (s *Supervisor) Restart(name string) error {
 	return nil
 }
 
-// Build runs a build command for the named process. The process must be
-// running. Log output is written to the process's invincible log stream.
-// If ctx is cancelled, the build command is killed and the state reverts.
+// Build runs a build command for the named process. Log output is written to the
+// process's invincible log stream. If ctx is cancelled, the build command is
+// killed and the state reverts to its previous value.
 func (s *Supervisor) Build(name, buildCmd, cwd string, ctx context.Context) error {
 	s.mu.RLock()
 	p := s.processes[name]
@@ -289,10 +290,11 @@ func (s *Supervisor) Build(name, buildCmd, cwd string, ctx context.Context) erro
 	}
 
 	p.mu.Lock()
-	if p.state != StateRunning && p.state != StateBuilding {
+	if p.state != StateStopped && p.state != StateRunning && p.state != StateBuilding {
 		p.mu.Unlock()
 		return fmt.Errorf("cannot build: process is %s", p.state.String())
 	}
+	prevState := p.state
 	p.state = StateBuilding
 	p.mu.Unlock()
 
@@ -305,7 +307,7 @@ func (s *Supervisor) Build(name, buildCmd, cwd string, ctx context.Context) erro
 	if err := cmd.Start(); err != nil {
 		p.mu.Lock()
 		if p.state == StateBuilding {
-			p.state = StateRunning
+			p.state = prevState
 		}
 		p.mu.Unlock()
 		s.Log(name, "build: failed to start: "+err.Error())
@@ -328,7 +330,7 @@ func (s *Supervisor) Build(name, buildCmd, cwd string, ctx context.Context) erro
 
 	p.mu.Lock()
 	if p.state == StateBuilding {
-		p.state = StateRunning
+		p.state = prevState
 	}
 	p.mu.Unlock()
 	return buildErr
@@ -375,6 +377,32 @@ func (s *Supervisor) StartAll() {
 	levels := s.g.StartLevels()
 	s.mu.RUnlock()
 
+	// Phase 1: initial builds — run all build commands in parallel before any
+	// process starts. A failed build logs the error but doesn't block other
+	// processes from building or starting.
+	var toBuild []*process
+	for _, p := range processes {
+		if p.cfg.Build != "" {
+			toBuild = append(toBuild, p)
+		}
+	}
+	if len(toBuild) > 0 {
+		var eg errgroup.Group
+		for _, p := range toBuild {
+			p := p
+			eg.Go(func() error {
+				if err := s.Build(p.cfg.Name, p.cfg.Build, p.cfg.Cwd, context.Background()); err != nil {
+					s.Log(p.cfg.Name, "build: "+err.Error())
+				} else {
+					s.Log(p.cfg.Name, "build: ok")
+				}
+				return nil // never fail the group — one broken build shouldn't block others
+			})
+		}
+		_ = eg.Wait()
+	}
+
+	// Phase 2: level-based startup.
 	for _, level := range levels {
 		var wg sync.WaitGroup
 		for _, name := range level {
