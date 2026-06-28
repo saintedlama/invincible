@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.2](https://github.com/saintedlama/invincible/compare/v1.6.1...v1.6.2) (2026-06-28)
+
+
+### Bug Fixes
+
+* add a build before start stage ([7ecc95b](https://github.com/saintedlama/invincible/commit/7ecc95b1581d2443d2b42b315d5b8db5b1a58778))
+
 ## [1.6.1](https://github.com/saintedlama/invincible/compare/v1.6.0...v1.6.1) (2026-06-15)
 
 
