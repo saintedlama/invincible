@@ -17,6 +17,7 @@ const DefaultWatchDebounce = 500 * time.Millisecond
 type Project struct {
 	Name    string `toml:"name"`
 	APIAddr string `toml:"api_addr"`
+	Shell   string `toml:"shell"` // "auto" (default), "cmd", "bash", or "pwsh"
 }
 
 type ProcessConfig struct {
@@ -54,6 +55,14 @@ func Load(path string) (*Config, error) {
 	var cfg Config
 	if err := toml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing config: %w", err)
+	}
+	switch cfg.Project.Shell {
+	case "":
+		cfg.Project.Shell = "auto"
+	case "auto", "cmd", "bash", "pwsh":
+		// valid
+	default:
+		return nil, fmt.Errorf("project: invalid shell %q (must be one of: auto, cmd, bash, pwsh)", cfg.Project.Shell)
 	}
 	for i, p := range cfg.Processes {
 		if p.Name == "" {

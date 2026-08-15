@@ -10,11 +10,17 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func ShellCommand(cmdStr string) *exec.Cmd {
-	if sh, err := exec.LookPath("sh"); err == nil {
-		return exec.Command(sh, "-c", cmdStr)
+// defaultShell is the "auto" shell on Windows: pwsh (PowerShell 7+) if found
+// on PATH, otherwise cmd.exe.
+func defaultShell() Shell {
+	return defaultShellFor(exec.LookPath)
+}
+
+func defaultShellFor(lookPath func(string) (string, error)) Shell {
+	if _, err := lookPath("pwsh"); err == nil {
+		return pwshShell{}
 	}
-	return exec.Command("cmd", "/c", cmdStr)
+	return cmdShell{}
 }
 
 func setProcessGroupAttr(cmd *exec.Cmd) {

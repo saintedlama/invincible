@@ -21,6 +21,7 @@ func init() {
 const initTemplate = `[project]
 name = "myapp"
 # api_addr = ":7777"  # override the HTTP API port (default: path-derived offset from 7777)
+# shell = "auto"      # interpreter for cmd/build: "auto" (bash, or on Windows: pwsh if found else cmd.exe), "cmd", "bash", "pwsh"
 
 # Each [[process]] block defines one managed service.
 # Invincible finds a free port starting from the hint and injects it as PORT=<n>.

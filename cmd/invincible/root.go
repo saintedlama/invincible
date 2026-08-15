@@ -66,6 +66,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	}
 
 	sup := supervisor.New(cfg.Processes)
+	sup.SetShell(cfg.Project.Shell)
 
 	srv, err := api.New(sup, addr)
 	if err != nil {

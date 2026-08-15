@@ -80,12 +80,14 @@ type Supervisor struct {
 	processes map[string]*process
 	order     []string     // insertion order from config, used for display
 	g         *graph.Graph // dependency graph
+	shell     Shell        // interpreter for cmd/build; defaults to the OS-appropriate shell
 }
 
 func New(cfgs []config.ProcessConfig) *Supervisor {
 	s := &Supervisor{
 		processes: make(map[string]*process),
 		order:     make([]string, 0, len(cfgs)),
+		shell:     shellFor("auto"),
 	}
 	edges := make([]graph.Edge, len(cfgs))
 	for i, c := range cfgs {
@@ -95,6 +97,13 @@ func New(cfgs []config.ProcessConfig) *Supervisor {
 	}
 	s.g = graph.New(edges)
 	return s
+}
+
+// SetShell sets the interpreter used to run process and build commands.
+// shell is a project.shell config value: "auto", "cmd", "bash", or "pwsh".
+// Must be called before any process is started.
+func (s *Supervisor) SetShell(shell string) {
+	s.shell = shellFor(shell)
 }
 
 func (s *Supervisor) Start(name string) error {
@@ -127,7 +136,7 @@ func (s *Supervisor) startProcess(p *process) error {
 		p.assignedPort = port
 	}
 
-	cmd := ShellCommand(p.cfg.Cmd)
+	cmd := s.shell.Command(p.cfg.Cmd)
 	setProcessGroupAttr(cmd)
 	if p.cfg.Cwd != "" {
 		cmd.Dir = p.cfg.Cwd
@@ -298,7 +307,7 @@ func (s *Supervisor) Build(name, buildCmd, cwd string, ctx context.Context) erro
 	p.state = StateBuilding
 	p.mu.Unlock()
 
-	cmd := ShellCommand(buildCmd)
+	cmd := s.shell.Command(buildCmd)
 	if cwd != "" {
 		cmd.Dir = cwd
 	}

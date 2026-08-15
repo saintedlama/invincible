@@ -7,9 +7,8 @@ import (
 	"syscall"
 )
 
-func ShellCommand(cmdStr string) *exec.Cmd {
-	return exec.Command("sh", "-c", cmdStr)
-}
+// defaultShell is the "auto" shell on unix.
+func defaultShell() Shell { return bashShell{} }
 
 func setProcessGroupAttr(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

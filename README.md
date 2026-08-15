@@ -52,6 +52,7 @@ Invincible looks for `invincible.toml` in the current directory by default.
 [project]
 name    = "myapp"
 # api_addr = ":7777"   # override the HTTP API port (default: path-derived offset from 7777)
+# shell    = "auto"    # interpreter for cmd/build: "auto" (bash, or on Windows: pwsh if found else cmd.exe), "cmd", "bash", "pwsh"
 
 [[process]]
 name          = "api"
@@ -70,6 +71,21 @@ name = "worker"
 cmd  = "go run ./cmd/worker"
 # port omitted → Invincible assigns an arbitrary free port
 ```
+
+### Shell selection
+
+Each `cmd` string and each `build` step is run through an interpreter, chosen by `project.shell`:
+
+| Value | Behavior |
+|---|---|
+| `auto` (default) | `bash` on Linux/macOS. On Windows: `pwsh` if it's found on `PATH`, otherwise `cmd.exe` |
+| `cmd` | `cmd.exe /c "..."` — Windows only |
+| `bash` | `bash -c "..."` |
+| `pwsh` | `pwsh -NoProfile -Command "..."` — PowerShell **7+** only; Windows PowerShell 5.1 (`powershell.exe`) is not supported, since it predates the `&&`/`||` chain operators `build` steps rely on |
+
+Explicitly setting `shell = "cmd"`, `"bash"`, or `"pwsh"` is deterministic — there's no fallback if that interpreter's binary isn't on `PATH`; the process just fails to start with a normal "executable not found" error. `auto` is the one case that probes for `pwsh` first, since it's a strict upgrade over `cmd.exe` for build-step chaining when it's available.
+
+The default changed in a prior version: Invincible used to prefer a POSIX shell (e.g. Git Bash) over `cmd.exe` whenever one was found on `PATH`. That shell ran non-interactively, so it never sourced `~/.bashrc`/`~/.bash_profile` — tools whose `PATH` entry is only added by a shell profile script (common with `nvm`, Volta, etc.) could go missing even though they work fine in an interactive terminal. `auto` no longer probes for a POSIX shell on Windows; set `shell = "bash"` explicitly if you rely on POSIX syntax in your commands.
 
 ### Port assignment
 

@@ -244,6 +244,61 @@ api_addr = ":8888"
 	}
 }
 
+func TestLoad_ShellDefault(t *testing.T) {
+	path := writeToml(t, `
+[project]
+name = "app"
+
+[[process]]
+name = "api"
+cmd = "echo"
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Project.Shell != "auto" {
+		t.Errorf("shell default: got %q, want auto", cfg.Project.Shell)
+	}
+}
+
+func TestLoad_ShellExplicit(t *testing.T) {
+	for _, shell := range []string{"auto", "cmd", "bash", "pwsh"} {
+		path := writeToml(t, `
+[project]
+name = "app"
+shell = "`+shell+`"
+
+[[process]]
+name = "api"
+cmd = "echo"
+`)
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatalf("shell %q: %v", shell, err)
+		}
+		if cfg.Project.Shell != shell {
+			t.Errorf("shell: got %q, want %q", cfg.Project.Shell, shell)
+		}
+	}
+}
+
+func TestLoad_ShellInvalid(t *testing.T) {
+	path := writeToml(t, `
+[project]
+name = "app"
+shell = "fish"
+
+[[process]]
+name = "api"
+cmd = "echo"
+`)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for invalid shell")
+	}
+}
+
 func TestLoad_DependsOn(t *testing.T) {
 	path := writeToml(t, `
 [[process]]

@@ -10,15 +10,24 @@ import (
 	"github.com/saintedlama/invincible/internal/config"
 )
 
-func requireSh(t *testing.T) {
+func requireBash(t *testing.T) {
 	t.Helper()
-	if _, err := exec.LookPath("sh"); err != nil {
-		t.Skip("sh not available")
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash not available")
 	}
 }
 
+// newTestSupervisor builds a Supervisor pinned to the "bash" interpreter,
+// since these tests exercise POSIX command syntax (sleep, $VAR, &&)
+// regardless of the OS-specific "auto" default.
+func newTestSupervisor(cfgs []config.ProcessConfig) *Supervisor {
+	sup := New(cfgs)
+	sup.SetShell("bash")
+	return sup
+}
+
 func TestNew_InitialState(t *testing.T) {
-	sup := New([]config.ProcessConfig{
+	sup := newTestSupervisor([]config.ProcessConfig{
 		{Name: "foo", Cmd: "echo foo", PortEnv: "PORT"},
 		{Name: "bar", Cmd: "echo bar", PortEnv: "PORT"},
 	})
@@ -38,8 +47,8 @@ func TestNew_InitialState(t *testing.T) {
 }
 
 func TestSupervisor_StartStop(t *testing.T) {
-	requireSh(t)
-	sup := New([]config.ProcessConfig{
+	requireBash(t)
+	sup := newTestSupervisor([]config.ProcessConfig{
 		{Name: "proc", Cmd: "sleep 60", NoPort: true},
 	})
 	t.Cleanup(sup.StopAll)
@@ -71,8 +80,8 @@ func TestSupervisor_StartStop(t *testing.T) {
 }
 
 func TestSupervisor_Restart(t *testing.T) {
-	requireSh(t)
-	sup := New([]config.ProcessConfig{
+	requireBash(t)
+	sup := newTestSupervisor([]config.ProcessConfig{
 		{Name: "proc", Cmd: "sleep 60", NoPort: true},
 	})
 	t.Cleanup(sup.StopAll)
@@ -98,8 +107,8 @@ func TestSupervisor_Restart(t *testing.T) {
 }
 
 func TestSupervisor_StartAll_StopAll(t *testing.T) {
-	requireSh(t)
-	sup := New([]config.ProcessConfig{
+	requireBash(t)
+	sup := newTestSupervisor([]config.ProcessConfig{
 		{Name: "p1", Cmd: "sleep 60", NoPort: true},
 		{Name: "p2", Cmd: "sleep 60", NoPort: true},
 	})
@@ -124,8 +133,8 @@ func TestSupervisor_StartAll_StopAll(t *testing.T) {
 }
 
 func TestSupervisor_Logs(t *testing.T) {
-	requireSh(t)
-	sup := New([]config.ProcessConfig{
+	requireBash(t)
+	sup := newTestSupervisor([]config.ProcessConfig{
 		{Name: "logger", Cmd: `echo "hello from process" && sleep 60`, NoPort: true},
 	})
 	t.Cleanup(sup.StopAll)
@@ -149,8 +158,8 @@ func TestSupervisor_Logs(t *testing.T) {
 }
 
 func TestSupervisor_ConfigEnv(t *testing.T) {
-	requireSh(t)
-	sup := New([]config.ProcessConfig{
+	requireBash(t)
+	sup := newTestSupervisor([]config.ProcessConfig{
 		{Name: "envtest", Cmd: `echo "MY_VAR=$MY_VAR" && sleep 60`, PortEnv: "PORT", NoPort: true, Env: map[string]string{"MY_VAR": "hello123"}},
 	})
 	t.Cleanup(sup.StopAll)
@@ -174,7 +183,7 @@ func TestSupervisor_ConfigEnv(t *testing.T) {
 }
 
 func TestSupervisor_UnknownProcess(t *testing.T) {
-	sup := New([]config.ProcessConfig{})
+	sup := newTestSupervisor([]config.ProcessConfig{})
 
 	if err := sup.Start("nobody"); err == nil {
 		t.Error("Start: expected error for unknown process")
@@ -185,7 +194,7 @@ func TestSupervisor_UnknownProcess(t *testing.T) {
 }
 
 func TestSupervisor_ProbePort_TransitionsToRunning(t *testing.T) {
-	requireSh(t)
+	requireBash(t)
 
 	// Find a free port and release it so startProcess sees it as available.
 	l, err := net.Listen("tcp", "127.0.0.1:0")
@@ -195,7 +204,7 @@ func TestSupervisor_ProbePort_TransitionsToRunning(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 	l.Close()
 
-	sup := New([]config.ProcessConfig{
+	sup := newTestSupervisor([]config.ProcessConfig{
 		{Name: "proc", Cmd: "sleep 60", PortEnv: "PORT", Port: port},
 	})
 	t.Cleanup(sup.StopAll)
@@ -219,7 +228,7 @@ func TestSupervisor_ProbePort_TransitionsToRunning(t *testing.T) {
 }
 
 func TestSupervisor_ProbePort_StaysProbing(t *testing.T) {
-	requireSh(t)
+	requireBash(t)
 
 	// Get a free port but don't bind it — sleep 60 won't bind it either.
 	l, err := net.Listen("tcp", "127.0.0.1:0")
@@ -229,7 +238,7 @@ func TestSupervisor_ProbePort_StaysProbing(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 	l.Close()
 
-	sup := New([]config.ProcessConfig{
+	sup := newTestSupervisor([]config.ProcessConfig{
 		{Name: "proc", Cmd: "sleep 60", PortEnv: "PORT", Port: port},
 	})
 	t.Cleanup(sup.StopAll)
@@ -245,15 +254,15 @@ func TestSupervisor_ProbePort_StaysProbing(t *testing.T) {
 }
 
 func TestSupervisor_Logs_UnknownProcess(t *testing.T) {
-	sup := New([]config.ProcessConfig{})
+	sup := newTestSupervisor([]config.ProcessConfig{})
 	if logs := sup.Logs("nobody", 10); logs != nil {
 		t.Errorf("expected nil logs for unknown process, got %v", logs)
 	}
 }
 
 func TestSupervisor_StartIdempotent(t *testing.T) {
-	requireSh(t)
-	sup := New([]config.ProcessConfig{
+	requireBash(t)
+	sup := newTestSupervisor([]config.ProcessConfig{
 		{Name: "proc", Cmd: "sleep 60", NoPort: true},
 	})
 	t.Cleanup(sup.StopAll)
@@ -276,10 +285,10 @@ func TestSupervisor_StartIdempotent(t *testing.T) {
 }
 
 func TestSupervisor_StartAll_DependencyOrder(t *testing.T) {
-	requireSh(t)
+	requireBash(t)
 
 	// worker ← api ← frontend; chain with NoPort so all go to running immediately.
-	sup := New([]config.ProcessConfig{
+	sup := newTestSupervisor([]config.ProcessConfig{
 		{Name: "frontend", Cmd: "sleep 60", NoPort: true, PortEnv: "PORT", DependsOn: []string{"api"}},
 		{Name: "api", Cmd: "sleep 60", NoPort: true, PortEnv: "PORT", DependsOn: []string{"worker"}},
 		{Name: "worker", Cmd: "sleep 60", NoPort: true, PortEnv: "PORT"},
@@ -297,9 +306,9 @@ func TestSupervisor_StartAll_DependencyOrder(t *testing.T) {
 }
 
 func TestSupervisor_waitForRunning_Timeout(t *testing.T) {
-	requireSh(t)
+	requireBash(t)
 
-	sup := New([]config.ProcessConfig{
+	sup := newTestSupervisor([]config.ProcessConfig{
 		{Name: "proc", Cmd: "sleep 60", PortEnv: "PORT"},
 	})
 	t.Cleanup(sup.StopAll)
@@ -314,8 +323,8 @@ func TestSupervisor_waitForRunning_Timeout(t *testing.T) {
 }
 
 func TestSupervisor_LifecycleEvents(t *testing.T) {
-	requireSh(t)
-	sup := New([]config.ProcessConfig{
+	requireBash(t)
+	sup := newTestSupervisor([]config.ProcessConfig{
 		{Name: "proc", Cmd: "sleep 60", NoPort: true},
 	})
 	t.Cleanup(sup.StopAll)
@@ -357,8 +366,8 @@ func TestSupervisor_LifecycleEvents(t *testing.T) {
 }
 
 func TestSupervisor_CrashRestart(t *testing.T) {
-	requireSh(t)
-	sup := New([]config.ProcessConfig{
+	requireBash(t)
+	sup := newTestSupervisor([]config.ProcessConfig{
 		// exit 1 terminates immediately; RestartDelay defaults to 0 in direct config.
 		{Name: "crasher", Cmd: "exit 1", NoPort: true},
 	})
@@ -375,7 +384,7 @@ func TestSupervisor_CrashRestart(t *testing.T) {
 }
 
 func TestSupervisor_DependencyPortEnv(t *testing.T) {
-	requireSh(t)
+	requireBash(t)
 
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -384,7 +393,7 @@ func TestSupervisor_DependencyPortEnv(t *testing.T) {
 	dbPort := l.Addr().(*net.TCPAddr).Port
 	l.Close()
 
-	sup := New([]config.ProcessConfig{
+	sup := newTestSupervisor([]config.ProcessConfig{
 		{Name: "db", Cmd: "sleep 60", Port: dbPort, PortEnv: "PORT"},
 		{Name: "api", Cmd: `echo "DB_PORT=$DB_PORT" && sleep 60`, NoPort: true, DependsOn: []string{"db"}},
 	})
@@ -406,8 +415,8 @@ func TestSupervisor_DependencyPortEnv(t *testing.T) {
 }
 
 func TestSupervisor_RestartAll(t *testing.T) {
-	requireSh(t)
-	sup := New([]config.ProcessConfig{
+	requireBash(t)
+	sup := newTestSupervisor([]config.ProcessConfig{
 		{Name: "db", Cmd: "sleep 60", NoPort: true},
 		{Name: "api", Cmd: "sleep 60", NoPort: true, DependsOn: []string{"db"}},
 	})
@@ -435,8 +444,8 @@ func TestSupervisor_RestartAll(t *testing.T) {
 }
 
 func TestSupervisor_StopAll_Concurrent(t *testing.T) {
-	requireSh(t)
-	sup := New([]config.ProcessConfig{
+	requireBash(t)
+	sup := newTestSupervisor([]config.ProcessConfig{
 		{Name: "db", Cmd: "sleep 60", NoPort: true},
 		{Name: "api", Cmd: "sleep 60", NoPort: true, DependsOn: []string{"db"}},
 		{Name: "frontend", Cmd: "sleep 60", NoPort: true, DependsOn: []string{"api"}},
@@ -470,9 +479,9 @@ func logContains(entries []LogEntry, line, source string) bool {
 }
 
 func TestSupervisor_Cwd(t *testing.T) {
-	requireSh(t)
+	requireBash(t)
 	tmp := t.TempDir()
-	sup := New([]config.ProcessConfig{
+	sup := newTestSupervisor([]config.ProcessConfig{
 		{Name: "p1", Cmd: "echo $PWD && sleep 60", Cwd: tmp, NoPort: true},
 	})
 	t.Cleanup(sup.StopAll)
