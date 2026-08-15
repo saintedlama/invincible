@@ -40,13 +40,13 @@ go build -o invincible ./cmd/invincible
 # Create a starter config in the current directory
 invincible init
 
-# Edit invincible.toml, then run
+# Edit .invincible.toml, then run
 invincible
 ```
 
 ## Configuration
 
-Invincible looks for `invincible.toml` in the current directory by default.
+Invincible looks for `.invincible.toml` in the current directory by default.
 
 ```toml
 [project]
@@ -215,7 +215,7 @@ watch = ["."]
 invincible [flags]
 
 Flags:
-  --config    path to config file           (default: invincible.toml)
+  --config    path to config file           (default: .invincible.toml)
   --api-addr  preferred HTTP API address    (default: path-derived offset from :7777; falls back to config api_addr)
   --no-tui    run headless, print API URL to stdout
 ```
@@ -227,6 +227,8 @@ Invincible has two screens — **Dashboard** (process list + details) and **Logs
 | Key | Action |
 |---|---|
 | `Tab` | Toggle between Dashboard and Logs screens |
+| `p` | Switch to Dashboard screen |
+| `l` | Switch to Logs screen |
 | `↑` / `k` | Select previous process |
 | `↓` / `j` | Select next process |
 | `s` | Start selected process |
@@ -299,6 +301,7 @@ The API binds to `127.0.0.1` and is only accessible locally.
 | `POST` | `/processes/{name}/start` | Start a process |
 | `POST` | `/processes/{name}/stop` | Stop a process |
 | `POST` | `/processes/{name}/restart` | Restart a process |
+| `POST` | `/processes/restart-all` | Restart all processes |
 | `GET` | `/openapi.json` | OpenAPI 3.0 spec |
 
 ### Process object
