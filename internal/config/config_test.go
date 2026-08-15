@@ -299,6 +299,46 @@ cmd = "echo"
 	}
 }
 
+func TestLoad_WatchWithoutBuild(t *testing.T) {
+	path := writeToml(t, `
+[[process]]
+name = "web"
+cmd = "npm run dev"
+watch = ["."]
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("watch without build should be allowed: %v", err)
+	}
+	if len(cfg.Processes[0].Build) != 0 {
+		t.Errorf("build: got %v, want empty", cfg.Processes[0].Build)
+	}
+}
+
+func TestLoad_BuildSteps(t *testing.T) {
+	path := writeToml(t, `
+[[process]]
+name = "api"
+cmd = "./bin/api"
+watch = ["."]
+build = ["go generate ./...", "go build -o ./bin/api ./cmd/api"]
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"go generate ./...", "go build -o ./bin/api ./cmd/api"}
+	got := cfg.Processes[0].Build
+	if len(got) != len(want) {
+		t.Fatalf("build steps: got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("build step %d: got %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 func TestLoad_DependsOn(t *testing.T) {
 	path := writeToml(t, `
 [[process]]

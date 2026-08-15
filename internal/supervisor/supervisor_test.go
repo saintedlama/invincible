@@ -1,9 +1,12 @@
 package supervisor
 
 import (
+	"context"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -500,5 +503,30 @@ func TestSupervisor_Cwd(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected stdout output, got: %v", sup.Logs("p1", 10))
+	}
+}
+
+// TestSupervisor_Build_ChainsStepsInOneShellInvocation verifies that build
+// steps run as one chained shell invocation, so a `cd` in one step is still
+// in effect for the next step — the whole reason to chain instead of
+// running each step as its own process.
+func TestSupervisor_Build_ChainsStepsInOneShellInvocation(t *testing.T) {
+	requireBash(t)
+	sup := newTestSupervisor([]config.ProcessConfig{
+		{Name: "proc", Cmd: "sleep 60", NoPort: true},
+	})
+	t.Cleanup(sup.StopAll)
+
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "sub"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(dir, "sub", "marker.txt")
+
+	if err := sup.Build("proc", []string{"cd sub", "touch marker.txt"}, dir, context.Background()); err != nil {
+		t.Fatalf("build failed: %v", err)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Errorf("expected chained cd to carry over to the next step: %v", err)
 	}
 }

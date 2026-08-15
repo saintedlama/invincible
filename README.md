@@ -129,9 +129,12 @@ cwd  = "./frontend"
 port = 5173
 ```
 
-### File watching + auto-rebuild (opt-in)
+### File watching + auto-restart (opt-in)
 
-When `watch` and `build` are both configured for a process, Invincible watches the specified directories for file changes, runs the build command, and restarts the process on success. If the build fails, the old binary keeps running.
+When `watch` is configured for a process, Invincible watches the specified directories for file changes and restarts the process. `build` is optional:
+
+- If `build` is set, Invincible runs its steps first and restarts only on success — the old process keeps running if the build fails. Use this for compiled languages (Go, Rust, etc.) that need a build step before the new binary can run.
+- If `build` is omitted, Invincible restarts the process directly on file change. Use this for interpreted runtimes (Node, Python, Ruby, etc.) where there's nothing to compile — the process just needs to pick up the new source on the next start.
 
 Watch directories are relative to `cwd` when set, otherwise relative to the project root.
 
@@ -142,14 +145,69 @@ cmd   = "./bin/api"
 cwd   = "./backend"
 
 # Rebuild and restart on file changes
-build           = "go build -o ./bin/api ./cmd/api"
+build           = ["go generate ./...", "go build -o ./bin/api ./cmd/api"]
 watch           = ["."]                      # directories to watch
 watch_include   = ["*.go", "*.templ"]       # file globs that trigger rebuild (default: all)
 watch_exclude   = ["vendor", ".git", "tmp"] # subdirectories to skip
 watch_debounce  = "500ms"                   # quiet period before triggering (default: 500ms)
+
+[[process]]
+name  = "worker"
+cmd   = "python worker.py"
+cwd   = "./worker"
+
+# No build step — just restart on file change
+watch = ["."]
 ```
 
+`build` is a list of steps, run in order as **one chained shell invocation** (`step1 && step2 && ...`) rather than as separate processes. That matters because each step is not a persistent shell session on its own — a `cd` only affects the process it runs in, so chaining steps together in a single invocation is what lets a `cd` in one step carry over to the next:
+
+```toml
+build = ["cd ./frontend", "npm run build"]
+```
+
+On `cmd`, steps are joined without spaces around `&&` (`cd frontend&&npm run build`) — cmd.exe's argument parsing can otherwise fold a trailing space before `&&` into a builtin's argument (e.g. `cd`'s target directory). `bash` and `pwsh` join with spaces (`cd frontend && npm run build`).
+
 The TUI detail panel shows `watch  on` for processes with active file watching. Build output and watch events appear in the process logs with the `invincible` source.
+
+### Kitchen sink example
+
+Every config field in one file, for reference:
+
+```toml
+[project]
+name     = "myapp"    # optional; display only
+api_addr = ":7777"    # override the HTTP API bind address (default: path-derived offset from :7777)
+shell    = "auto"     # interpreter for cmd/build: "auto" | "cmd" | "bash" | "pwsh" (default: "auto"; on Windows, "auto" prefers pwsh over cmd.exe if found)
+
+[[process]]
+name             = "api"                             # required, must be unique
+cmd              = "go run ./cmd/api"                # required
+cwd              = "./backend"                       # working directory (default: project root)
+port             = 8080                              # port hint; Invincible searches upward for a free port
+port_env         = "PORT"                            # env var name for this process's own port (default: "PORT")
+no_port          = false                             # true disables port assignment entirely
+depends_on       = ["worker"]                        # restart this process if a dependency's port changes
+restart_delay    = "500ms"                           # wait before restarting after a crash (default: "500ms")
+shutdown_timeout = "500ms"                            # SIGTERM grace period before SIGKILL (default: "500ms")
+env              = { QUEUE = "default", LOG_LEVEL = "debug" }  # extra static env vars
+
+# File watching + auto-restart (opt-in; all fields below are optional)
+watch          = ["."]                                # directories to watch for changes
+watch_include  = ["*.go", "*.templ"]                  # file globs that trigger a restart (default: all files)
+watch_exclude  = ["vendor", ".git", "tmp"]             # subdirectories to skip
+watch_debounce = "500ms"                               # quiet period before triggering (default: "500ms")
+build          = ["go generate ./...", "go build -o ./bin/api ./cmd/api"]  # optional; steps run as one chained shell invocation before restart; omit to restart directly
+
+[[process]]
+name    = "worker"
+cmd     = "python worker.py"
+cwd     = "./worker"
+no_port = true    # this process doesn't listen on a port
+
+# Watch without a build step — restarts directly on file change (e.g. interpreted languages)
+watch = ["."]
+```
 
 ## Running
 

@@ -41,7 +41,7 @@ port = 8080
 # watch_include = ["*.go"]   # file glob patterns to react to (default: all files)
 # watch_exclude = ["tmp", "vendor", ".git"]  # directories to skip
 # watch_debounce = "500ms"   # wait for quiet period before rebuilding
-# build = "go build ./..."   # command to run before restarting (required with watch)
+# build = ["go build ./..."] # optional: steps run as one chained shell invocation before restarting; omit to restart directly on change
 
 [[process]]
 name = "worker"

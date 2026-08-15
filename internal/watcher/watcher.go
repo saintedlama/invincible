@@ -19,6 +19,8 @@ type Watcher struct {
 	log       func(string)
 }
 
+// New creates a Watcher. onBuild may be nil, in which case a file change
+// restarts the process directly without a build step.
 func New(dirs, include, exclude []string, debounce time.Duration, onBuild func(context.Context) error, onRestart func() error, log func(string)) *Watcher {
 	return &Watcher{
 		dirs:      dirs,
@@ -80,6 +82,14 @@ func (w *Watcher) Run(ctx context.Context) {
 			return
 		case <-timerC:
 			timer = nil
+
+			if w.onBuild == nil {
+				if err := w.onRestart(); err != nil {
+					w.log("restart: " + err.Error())
+				}
+				continue
+			}
+
 			buildCtx, cancel := context.WithCancel(ctx)
 			buildCancel = cancel
 

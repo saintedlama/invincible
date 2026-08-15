@@ -31,11 +31,11 @@ type ProcessConfig struct {
 	Env             map[string]string `toml:"env"`
 	RestartDelay    string            `toml:"restart_delay"`
 	ShutdownTimeout string            `toml:"shutdown_timeout"`
-	// File watching + auto-rebuild (opt-in)
+	// File watching + auto-restart (opt-in)
 	Watch         []string `toml:"watch"`          // directories to watch for changes
 	WatchInclude  []string `toml:"watch_include"`  // file glob patterns to react to, e.g. ["*.go"]
 	WatchExclude  []string `toml:"watch_exclude"`  // directories to exclude from watching, e.g. ["tmp","vendor"]
-	Build         string   `toml:"build"`          // command to run before restarting, e.g. "go build ./..."
+	Build         []string `toml:"build"`          // optional: ordered build steps chained in one shell invocation before restarting, e.g. ["go generate ./...", "go build ./..."]
 	WatchDebounce string   `toml:"watch_debounce"` // debounce delay, default "500ms"
 }
 
@@ -83,9 +83,6 @@ func Load(path string) (*Config, error) {
 			cfg.Processes[i].ShutdownTimeout = DefaultShutdownTimeout.String()
 		} else if _, err := time.ParseDuration(p.ShutdownTimeout); err != nil {
 			return nil, fmt.Errorf("process %q invalid shutdown_timeout %q: %w", p.Name, p.ShutdownTimeout, err)
-		}
-		if len(p.Watch) > 0 && p.Build == "" {
-			return nil, fmt.Errorf("process %q has watch dirs but no build command", p.Name)
 		}
 		if p.WatchDebounce == "" {
 			cfg.Processes[i].WatchDebounce = DefaultWatchDebounce.String()

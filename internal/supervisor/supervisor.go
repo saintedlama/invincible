@@ -287,10 +287,12 @@ func (s *Supervisor) Restart(name string) error {
 	return nil
 }
 
-// Build runs a build command for the named process. Log output is written to the
-// process's invincible log stream. If ctx is cancelled, the build command is
-// killed and the state reverts to its previous value.
-func (s *Supervisor) Build(name, buildCmd, cwd string, ctx context.Context) error {
+// Build runs the ordered build steps for the named process, chained into a
+// single shell invocation so that shell state (like a `cd`) carries from one
+// step to the next. Log output is written to the process's invincible log
+// stream. If ctx is cancelled, the build is killed and the state reverts to
+// its previous value.
+func (s *Supervisor) Build(name string, steps []string, cwd string, ctx context.Context) error {
 	s.mu.RLock()
 	p := s.processes[name]
 	s.mu.RUnlock()
@@ -307,7 +309,7 @@ func (s *Supervisor) Build(name, buildCmd, cwd string, ctx context.Context) erro
 	p.state = StateBuilding
 	p.mu.Unlock()
 
-	cmd := s.shell.Command(buildCmd)
+	cmd := s.shell.Command(s.shell.Join(steps))
 	if cwd != "" {
 		cmd.Dir = cwd
 	}
@@ -391,7 +393,7 @@ func (s *Supervisor) StartAll() {
 	// processes from building or starting.
 	var toBuild []*process
 	for _, p := range processes {
-		if p.cfg.Build != "" {
+		if len(p.cfg.Build) > 0 {
 			toBuild = append(toBuild, p)
 		}
 	}
@@ -545,7 +547,7 @@ func (s *Supervisor) Status() []ProcessStatus {
 			DependsOn: p.cfg.DependsOn,
 			Restarts:  p.restarts,
 			StartedAt: p.startedAt,
-			Watching:  len(p.cfg.Watch) > 0 && p.cfg.Build != "",
+			Watching:  len(p.cfg.Watch) > 0,
 		})
 		p.mu.Unlock()
 	}

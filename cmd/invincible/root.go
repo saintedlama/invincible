@@ -88,7 +88,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	watcherCtx, watcherCancel := context.WithCancel(context.Background())
 	defer watcherCancel()
 	for _, p := range cfg.Processes {
-		if len(p.Watch) == 0 || p.Build == "" {
+		if len(p.Watch) == 0 {
 			continue
 		}
 		proc := p
@@ -102,8 +102,11 @@ func runRoot(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		onBuild := func(ctx context.Context) error {
-			return sup.Build(proc.Name, proc.Build, proc.Cwd, ctx)
+		var onBuild func(context.Context) error
+		if len(proc.Build) > 0 {
+			onBuild = func(ctx context.Context) error {
+				return sup.Build(proc.Name, proc.Build, proc.Cwd, ctx)
+			}
 		}
 
 		onRestart := func() error {
