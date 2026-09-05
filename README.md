@@ -249,6 +249,8 @@ Invincible has two screens — **Dashboard** (process list + details) and **Logs
 | Scroll wheel | Dashboard: over process list → select next/previous process |
 | Scroll wheel | Logs screen: scroll logs |
 
+Invincible captures mouse clicks and drags for scrolling, which normally stops the terminal's own click-and-drag text selection. To select and copy log text anyway, hold **Shift** while clicking and dragging — most terminals (Windows Terminal, iTerm2, GNOME Terminal, Konsole, xterm, Alacritty, kitty, WezTerm) reserve Shift as an override that bypasses the app's mouse reporting for exactly this case.
+
 ## CLI commands
 
 ### `invincible init`

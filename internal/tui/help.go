@@ -14,6 +14,9 @@ func (m *model) renderHelpBar() string {
 	parts = append(parts, styleHelp.Render("p processes  l logs"))
 
 	parts = append(parts, styleInvincible.Render("f:"+filterLabels[m.filterMode]))
+	if m.screen == screenLogs {
+		parts = append(parts, styleHelp.Render("shift+drag to copy"))
+	}
 	parts = append(parts, styleHelp.Render("q quit"))
 
 	return panelStyle.Width(m.width).Render(strings.Join(parts, "  "))
