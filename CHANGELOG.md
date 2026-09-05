@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.0](https://github.com/saintedlama/invincible/compare/v1.6.2...v1.7.0) (2026-08-15)
+
+
+### Features
+
+* add configurable shell selection (cmd/bash/pwsh) with OS-aware defaults ([e75096d](https://github.com/saintedlama/invincible/commit/e75096d16efeeb0601dcf076294a87a08e56f1db))
+* make build step optional and chain build steps in one shell invocation ([796bd07](https://github.com/saintedlama/invincible/commit/796bd0736839d3556e5cee1eb699f8d5bf9d6ae1))
+
 ## [1.6.2](https://github.com/saintedlama/invincible/compare/v1.6.1...v1.6.2) (2026-06-28)
 
 
