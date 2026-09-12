@@ -1,18 +1,18 @@
 module github.com/saintedlama/invincible
 
-go 1.26
+go 1.26.0
 
 require (
-	charm.land/bubbles/v2 v2.1.1
-	charm.land/bubbletea/v2 v2.0.8
+	charm.land/bubbles/v2 v2.2.1
+	charm.land/bubbletea/v2 v2.0.9
 	charm.land/lipgloss/v2 v2.0.6
 	github.com/fsnotify/fsnotify v1.10.1
-	github.com/getkin/kin-openapi v0.146.0
-	github.com/go-chi/chi/v5 v5.3.1
+	github.com/getkin/kin-openapi v0.149.0
+	github.com/go-chi/chi/v5 v5.3.2
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/spf13/cobra v1.10.2
-	golang.org/x/sync v0.22.0
-	golang.org/x/sys v0.47.0
+	golang.org/x/sync v0.23.0
+	golang.org/x/sys v0.48.0
 )
 
 require (
