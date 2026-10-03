@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1](https://github.com/saintedlama/invincible/compare/v1.7.0...v1.7.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* add help text to footer how to copy logs from the logs panel ([486e5f7](https://github.com/saintedlama/invincible/commit/486e5f730cca93be7a07141d36ba50b6913a91d4))
+
 ## [1.7.0](https://github.com/saintedlama/invincible/compare/v1.6.2...v1.7.0) (2026-08-15)
 
 
