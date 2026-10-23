@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.8.0](https://github.com/saintedlama/invincible/compare/v1.7.0...v1.8.0) (2026-10-23)
+
+
+### Features
+
+* update skill to advice agents better on worktree support ([#38](https://github.com/saintedlama/invincible/issues/38)) ([98ba90a](https://github.com/saintedlama/invincible/commit/98ba90a0cc7ccaae0717fa151c90cb8b5c95350b))
+
+
+### Bug Fixes
+
+* add help text to footer how to copy logs from the logs panel ([486e5f7](https://github.com/saintedlama/invincible/commit/486e5f730cca93be7a07141d36ba50b6913a91d4))
+
 ## [1.7.0](https://github.com/saintedlama/invincible/compare/v1.6.2...v1.7.0) (2026-08-15)
 
 
