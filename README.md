@@ -1,58 +1,158 @@
 # Invincible
 
-> **Proof of concept.** Invincible is an experiment, not a finished product. APIs, config format, and behaviour WILL change without notice.
+<p align="center">
+  <strong>Local development process manager built for humans and autonomous AI agents.</strong><br />
+  Keep services alive, restart them on crash, auto-assign free ports, wire up dependencies, and stream logs.<br />
+  Native two-layer port isolation enables seamless parallel execution across git worktrees with zero port conflicts.
+</p>
 
-A process manager for local development, written in Go.
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
+  <a href="https://github.com/saintedlama/invincible/releases"><img src="https://img.shields.io/github/v/release/saintedlama/invincible?color=emerald" alt="Release" /></a>
+  <a href="https://github.com/saintedlama/invincible/actions/workflows/ci.yml"><img src="https://github.com/saintedlama/invincible/actions/workflows/ci.yml/badge.svg" alt="CI Status" /></a>
+  <a href="https://github.com/saintedlama/invincible"><img src="https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go" alt="Go Version" /></a>
+  <a href="#-multi-agent--worktree-workflows"><img src="https://img.shields.io/badge/Agents-Worktree%20Aware-purple" alt="Worktree Aware" /></a>
+</p>
 
-Keep services alive, restart them on crash, assign free ports automatically, wire up port dependencies, and optionally watch files for auto-rebuild — no Docker required. Comes with a terminal UI for humans and an HTTP API for agents.
+<p align="center">
+  <a href="#-quickstart">⚡ Quickstart</a> •
+  <a href="#-why-invincible">✨ Why Invincible?</a> •
+  <a href="#-what-invincible-is-not">🚫 What It's Not</a> •
+  <a href="#-multi-agent--worktree-workflows">🤖 Multi-Agent & Worktrees</a> •
+  <a href="#-configuration">⚙️ Configuration</a> •
+  <a href="#-terminal-ui">📊 Terminal UI</a> •
+  <a href="#-agent-skill--http-api">🔌 Agent Skill & API</a>
+</p>
+
+---
 
 ![Dashboard](screenshots/processes.png)
 
 ![Logs](screenshots/logs.png)
 
-## Invincible is Not
+---
 
-- A replacement for `make`
-- A replacement for a full process manager like systemd or supervisor
-- Intended for production use
+## ✨ Why Invincible?
 
-## Installation
+When developing microservices, full-stack applications, or orchestrating autonomous AI agents, running dev processes locally is messy. Docker adds virtualization overhead and slow feedback loops; shell scripts leave zombie processes behind; and running parallel git branches inevitably leads to port collision headaches.
 
-Requires Go 1.26 or later.
+Invincible runs directly on your machine as a single, lightweight binary with zero container sprawl:
+
+- 🤖 **Built for Multi-Agent Worktrees (Parallelism Superpower)** — Run $N$ parallel git worktrees or agent branches concurrently on the same machine. Each worktree automatically gets its own non-colliding control API and service ports without any configuration changes.
+- 🛡️ **Two-Layer Port Isolation** — Combines path-deterministic hashing for the supervisor control plane with upward free-port scanning for child processes.
+- ⚡ **Zero-Config Agent Discovery** — Agents simply read `.invincible.port` in their workspace root to immediately inspect, test, and restart their dedicated service stack.
+- 🔄 **Automatic Crash Recovery & Cascade Restarts** — Restarts crashed processes instantly. If a dependent service changes ports on restart, dependents are automatically updated with the new port and rebooted in graph order.
+- 🛠️ **File Watching with Chained Builds** — Recompiles code on change and gracefully restarts services only when the build succeeds.
+- 🖥️ **Dual Interface: TUI + HTTP API** — An interactive Bubble Tea terminal UI for developers and an OpenAPI-documented REST API for AI agents and automation.
+
+---
+
+## 🚫 What Invincible is NOT
+
+Being purpose-built for local development and autonomous agent workflows means making deliberate architectural boundaries. Invincible is intentionally **not**:
+
+- **A production orchestrator or init system** — Not a replacement for `systemd`, `supervisord`, Kubernetes, or Nomad. Invincible is optimized for interactive developer loops, instant crash recovery, and ephemeral local sessions on your machine.
+- **A container runtime or virtualization layer** — Not Docker or Podman. Processes run bare-metal on your host OS for zero startup latency, maximum execution speed, and direct debugger attachment.
+- **A build system or task runner** — Not `make`, `just`, `cargo`, or `turbo`. While Invincible coordinates chained pre-restart build steps on file changes, it leaves task execution and compilation logic to your project's native toolchains.
+
+---
+
+## ⚡ Quickstart
+
+### Installation
+
+Requires Go 1.26 or later:
 
 ```sh
 # Install to $GOPATH/bin
 go install github.com/saintedlama/invincible/cmd/invincible@latest
 ```
 
-## Building from source
+Or build from source:
 
 ```sh
-# Or build from source
 git clone https://github.com/saintedlama/invincible
 cd invincible
 go build -o invincible ./cmd/invincible
 ```
 
-## Quick start
+### Starting your stack
 
 ```sh
-# Create a starter config in the current directory
+# 1. Initialize a starter configuration in the current directory
 invincible init
 
-# Edit .invincible.toml, then run
+# 2. Edit .invincible.toml, then launch Invincible
 invincible
 ```
 
-## Configuration
+Run headless (no terminal UI, ideal for background services or CI/agent environments):
 
-Invincible looks for `.invincible.toml` in the current directory by default.
+```sh
+invincible --no-tui
+```
+
+---
+
+## 🤖 Multi-Agent & Worktree Workflows
+
+### The Multi-Worktree Challenge
+
+When humans and AI agents work simultaneously across multiple git worktrees (e.g., `main`, `fix-auth-race`, `feat-billing`), running local development stacks normally breaks:
+
+1. **Port Collisions:** Both worktrees try to bind `:8080`, `:3000`, or `:5432`. One fails to start or hijacks traffic from the other.
+2. **Control Ambiguity:** AI agents cannot identify which dev server belongs to their branch without manual port configuration.
+3. **Configuration Drift:** Manually modifying `.env` or port configurations in every worktree is error-prone and risks accidental commits.
+
+### How Invincible Solves This: Two-Layer Isolation
+
+Invincible handles multi-worktree parallelism automatically through a two-layer collision avoidance architecture:
+
+```
+  Git Worktree: main                          Git Worktree: feat-auth
+  (Primary Developer / Agent A)               (Autonomous Subagent / Agent B)
+  Root: /repo/main                            Root: /repo/feat-auth
+  ───────────────────────────────────────     ───────────────────────────────────────
+  Layer 1: Supervisor Control API             Layer 1: Supervisor Control API
+    .invincible.port  ──► 127.0.0.1:8912        .invincible.port  ──► 127.0.0.1:14205
+    (path hash: 7777 + offset 1135)             (path hash: 7777 + offset 6428)
+
+  Layer 2: Supervised Child Services          Layer 2: Supervised Child Services
+    ├─ api     :8080 (hint)                     ├─ api     :8081 (auto-shifted!)
+    ├─ web     :3000 (hint)                     ├─ web     :3001 (auto-shifted!)
+    └─ worker  (no-port)                        └─ worker  (no-port)
+
+  Injected Environment:                       Injected Environment:
+    PORT=8080, WEB_PORT=3000                    PORT=8081, WEB_PORT=3001
+  ───────────────────────────────────────     ───────────────────────────────────────
+  ✓ Zero port collisions                      ✓ Zero config changes or manual flags
+  ✓ Agent A controls main                     ✓ Agent B controls feat-auth
+```
+
+#### Layer 1: Deterministic Control API & `.invincible.port`
+- **Path-Derived Preferred Port:** When no explicit `--api-addr` is passed, Invincible hashes the absolute path of the workspace using FNV-1a to derive a deterministic port offset:
+  $$\text{Port} = 7777 + (\text{fnv32a}(\text{absPath}) \bmod 10000)$$
+  Because worktrees live in different filesystem directories, each worktree automatically picks a different preferred API port (between `7777` and `17776`).
+- **`.invincible.port` Discovery File:** On startup, Invincible writes the exact bound address (e.g. `127.0.0.1:14205`) to `.invincible.port` in the worktree root. The file is cleaned up on shutdown and is ignored by git.
+- **Agent Handshake:** An AI agent or subagent running in any worktree reads `.invincible.port` from its current working directory. It never needs hardcoded ports or discovery flags.
+- **Ephemeral Fallback:** If a preferred port happens to be in use, Invincible automatically falls back to an OS-assigned ephemeral port (`:0`) and records the final address in `.invincible.port`.
+
+#### Layer 2: Child Service Upward Port Scanning
+- When processes specify a preferred port (e.g. `port = 8080`), Invincible checks whether the port is free via non-blocking TCP probing.
+- If another worktree is already using port `8080`, Invincible automatically increments upward (`8081`, `8082`, ...) until an open port is located.
+- The assigned port is dynamically injected into child processes via `PORT` (or `port_env`) and sibling ports via `<PEER_NAME>_PORT` (e.g. `API_PORT`).
+
+---
+
+## ⚙️ Configuration
+
+Invincible loads `.invincible.toml` from the current working directory by default (or via `--config <path>`).
 
 ```toml
 [project]
 name    = "myapp"
 # api_addr = ":7777"   # override the HTTP API port (default: path-derived offset from 7777)
-# shell    = "auto"    # interpreter for cmd/build: "auto" (bash, or on Windows: pwsh if found else cmd.exe), "cmd", "bash", "pwsh"
+# shell    = "auto"    # interpreter for cmd/build: "auto" (bash on Unix, pwsh/cmd on Windows), "cmd", "bash", "pwsh"
 
 [[process]]
 name          = "api"
@@ -63,7 +163,7 @@ port          = 8080          # hint; Invincible finds the next free port if tak
 # no_port     = true          # disable port assignment for this process
 # depends_on  = ["worker"]    # restart this process if a dependency changes port
 # restart_delay = "500ms"     # wait before restarting after a crash (default: 500ms)
-# shutdown_timeout = "500ms"  # SIGTERM grace period before SIGKILL
+# shutdown_timeout = "500ms"  # SIGTERM grace period before SIGKILL (default: 500ms)
 # env         = { QUEUE = "default" }  # extra static env vars
 
 [[process]]
@@ -74,155 +174,98 @@ cmd  = "go run ./cmd/worker"
 
 ### Shell selection
 
-Each `cmd` string and each `build` step is run through an interpreter, chosen by `project.shell`:
+Each `cmd` string and each `build` step is run through an interpreter, configured by `project.shell`:
 
 | Value | Behavior |
 |---|---|
-| `auto` (default) | `bash` on Linux/macOS. On Windows: `pwsh` if it's found on `PATH`, otherwise `cmd.exe` |
+| `auto` (default) | `bash` on Linux/macOS. On Windows: `pwsh` if found on `PATH`, otherwise `cmd.exe` |
 | `cmd` | `cmd.exe /c "..."` — Windows only |
 | `bash` | `bash -c "..."` |
-| `pwsh` | `pwsh -NoProfile -Command "..."` — PowerShell **7+** only; Windows PowerShell 5.1 (`powershell.exe`) is not supported, since it predates the `&&`/`||` chain operators `build` steps rely on |
+| `pwsh` | `pwsh -NoProfile -Command "..."` — PowerShell **7+** only |
 
-Explicitly setting `shell = "cmd"`, `"bash"`, or `"pwsh"` is deterministic — there's no fallback if that interpreter's binary isn't on `PATH`; the process just fails to start with a normal "executable not found" error. `auto` is the one case that probes for `pwsh` first, since it's a strict upgrade over `cmd.exe` for build-step chaining when it's available.
-
-The default changed in a prior version: Invincible used to prefer a POSIX shell (e.g. Git Bash) over `cmd.exe` whenever one was found on `PATH`. That shell ran non-interactively, so it never sourced `~/.bashrc`/`~/.bash_profile` — tools whose `PATH` entry is only added by a shell profile script (common with `nvm`, Volta, etc.) could go missing even though they work fine in an interactive terminal. `auto` no longer probes for a POSIX shell on Windows; set `shell = "bash"` explicitly if you rely on POSIX syntax in your commands.
-
-### Port assignment
+### Port assignment & environment variables
 
 Every process that needs a port gets one automatically:
+- If `port` is set, Invincible scans upward starting from that hint until an available port is found.
+- If `port` is omitted, the OS assigns an arbitrary free ephemeral port.
+- Set `no_port = true` to opt out of port allocation.
 
-- If `port` is set, Invincible searches upward from that hint until it finds a free port.
-- If `port` is omitted, the OS assigns an arbitrary free port.
-- Set `no_port = true` to opt out entirely.
-
-### Port environment variables
-
-Before starting, Invincible injects into every process:
-
+Before launching each process, Invincible injects:
 | Variable | Value |
 |---|---|
 | `PORT` (or `port_env`) | This process's assigned port |
-| `<PEER_NAME>_PORT` | One variable per sibling that has a port, e.g. `API_PORT=8080` |
+| `<PEER_NAME>_PORT` | One variable per sibling process with a port, e.g. `API_PORT=8080` |
 
-### Dependencies
+### Dependency graph & restart cascades
 
 ```toml
 [[process]]
 name       = "frontend"
-cmd        = "..."
+cmd        = "npm run dev"
 depends_on = ["api"]
 ```
 
-If `api` crashes and gets a **new port**, `frontend` is automatically restarted with the updated `API_PORT`. If the port doesn't change, `frontend` is left alone.
+Processes are started in topological dependency order. If `api` crashes and receives a **new port** upon restarting, `frontend` is automatically restarted with the updated `API_PORT`. If the port remains unchanged, `frontend` is left running undisturbed. Cycles are detected at startup and rejected.
 
-Cycles are detected at startup — Invincible exits with an error if a cycle exists.
+### File watching & auto-rebuild (opt-in)
 
-### Working directory
+Invincible watches specified directories for changes and triggers debounced restarts or rebuilds:
 
-Set `cwd` to run a command from a specific directory:
-
-```toml
-[[process]]
-name = "frontend"
-cmd  = "npm run dev"
-cwd  = "./frontend"
-port = 5173
-```
-
-### File watching + auto-restart (opt-in)
-
-When `watch` is configured for a process, Invincible watches the specified directories for file changes and restarts the process. `build` is optional:
-
-- If `build` is set, Invincible runs its steps first and restarts only on success — the old process keeps running if the build fails. Use this for compiled languages (Go, Rust, etc.) that need a build step before the new binary can run.
-- If `build` is omitted, Invincible restarts the process directly on file change. Use this for interpreted runtimes (Node, Python, Ruby, etc.) where there's nothing to compile — the process just needs to pick up the new source on the next start.
-
-Watch directories are relative to `cwd` when set, otherwise relative to the project root.
+- **Compiled languages (Go, Rust, etc.):** Set `build` steps. Invincible runs them first as a single chained shell invocation (`step1 && step2`) and only restarts the process upon success. If compilation fails, the previous process continues serving traffic.
+- **Interpreted runtimes (Node, Python, etc.):** Omit `build` to restart immediately on file changes.
 
 ```toml
 [[process]]
-name  = "api"
-cmd   = "./bin/api"
-cwd   = "./backend"
-
-# Rebuild and restart on file changes
-build           = ["go generate ./...", "go build -o ./bin/api ./cmd/api"]
-watch           = ["."]                      # directories to watch
-watch_include   = ["*.go", "*.templ"]       # file globs that trigger rebuild (default: all)
-watch_exclude   = ["vendor", ".git", "tmp"] # subdirectories to skip
-watch_debounce  = "500ms"                   # quiet period before triggering (default: 500ms)
-
-[[process]]
-name  = "worker"
-cmd   = "python worker.py"
-cwd   = "./worker"
-
-# No build step — just restart on file change
-watch = ["."]
+name          = "api"
+cmd           = "./bin/api"
+cwd           = "./backend"
+build         = ["go generate ./...", "go build -o ./bin/api ./cmd/api"]
+watch         = ["."]
+watch_include = ["*.go", "*.templ"]
+watch_exclude = ["vendor", ".git", "tmp"]
+watch_debounce = "500ms"
 ```
 
-`build` is a list of steps, run in order as **one chained shell invocation** (`step1 && step2 && ...`) rather than as separate processes. That matters because each step is not a persistent shell session on its own — a `cd` only affects the process it runs in, so chaining steps together in a single invocation is what lets a `cd` in one step carry over to the next:
-
-```toml
-build = ["cd ./frontend", "npm run build"]
-```
-
-On `cmd`, steps are joined without spaces around `&&` (`cd frontend&&npm run build`) — cmd.exe's argument parsing can otherwise fold a trailing space before `&&` into a builtin's argument (e.g. `cd`'s target directory). `bash` and `pwsh` join with spaces (`cd frontend && npm run build`).
-
-The TUI detail panel shows `watch  on` for processes with active file watching. Build output and watch events appear in the process logs with the `invincible` source.
-
-### Kitchen sink example
-
-Every config field in one file, for reference:
+### Complete configuration reference
 
 ```toml
 [project]
-name     = "myapp"    # optional; display only
-api_addr = ":7777"    # override the HTTP API bind address (default: path-derived offset from :7777)
-shell    = "auto"     # interpreter for cmd/build: "auto" | "cmd" | "bash" | "pwsh" (default: "auto"; on Windows, "auto" prefers pwsh over cmd.exe if found)
+name     = "myapp"    # optional project display name
+api_addr = ":7777"    # override HTTP API bind address (default: path-derived offset from :7777)
+shell    = "auto"     # interpreter: "auto" | "cmd" | "bash" | "pwsh" (default: "auto")
 
 [[process]]
-name             = "api"                             # required, must be unique
-cmd              = "go run ./cmd/api"                # required
+name             = "api"                             # required, unique identifier
+cmd              = "go run ./cmd/api"                # required command line
 cwd              = "./backend"                       # working directory (default: project root)
-port             = 8080                              # port hint; Invincible searches upward for a free port
-port_env         = "PORT"                            # env var name for this process's own port (default: "PORT")
-no_port          = false                             # true disables port assignment entirely
-depends_on       = ["worker"]                        # restart this process if a dependency's port changes
-restart_delay    = "500ms"                           # wait before restarting after a crash (default: "500ms")
-shutdown_timeout = "500ms"                            # SIGTERM grace period before SIGKILL (default: "500ms")
-env              = { QUEUE = "default", LOG_LEVEL = "debug" }  # extra static env vars
+port             = 8080                              # port hint; scans upward if occupied
+port_env         = "PORT"                            # env var name for own port (default: "PORT")
+no_port          = false                             # true disables port allocation
+depends_on       = ["worker"]                        # cascade-restart if dependency port changes
+restart_delay    = "500ms"                           # delay before restarting crashed process (default: 500ms)
+shutdown_timeout = "500ms"                           # SIGTERM grace period before SIGKILL (default: 500ms)
+env              = { QUEUE = "default", LOG_LEVEL = "debug" }  # custom env vars
 
-# File watching + auto-restart (opt-in; all fields below are optional)
-watch          = ["."]                                # directories to watch for changes
-watch_include  = ["*.go", "*.templ"]                  # file globs that trigger a restart (default: all files)
-watch_exclude  = ["vendor", ".git", "tmp"]             # subdirectories to skip
-watch_debounce = "500ms"                               # quiet period before triggering (default: "500ms")
-build          = ["go generate ./...", "go build -o ./bin/api ./cmd/api"]  # optional; steps run as one chained shell invocation before restart; omit to restart directly
+# Optional file watching
+watch          = ["."]                                # directories to monitor
+watch_include  = ["*.go", "*.templ"]                  # file glob filter (default: all files)
+watch_exclude  = ["vendor", ".git", "tmp"]             # subdirectories to ignore
+watch_debounce = "500ms"                               # quiet duration before rebuild (default: 500ms)
+build          = ["go generate ./...", "go build -o ./bin/api ./cmd/api"] # chained pre-restart build steps
 
 [[process]]
 name    = "worker"
 cmd     = "python worker.py"
 cwd     = "./worker"
-no_port = true    # this process doesn't listen on a port
-
-# Watch without a build step — restarts directly on file change (e.g. interpreted languages)
-watch = ["."]
+no_port = true
+watch   = ["."]
 ```
 
-## Running
+---
 
-```sh
-invincible [flags]
+## 📊 Terminal UI
 
-Flags:
-  --config    path to config file           (default: .invincible.toml)
-  --api-addr  preferred HTTP API address    (default: path-derived offset from :7777; falls back to config api_addr)
-  --no-tui    run headless, print API URL to stdout
-```
-
-### TUI key bindings
-
-Invincible has two screens — **Dashboard** (process list + details) and **Logs** (full-width). Press `Tab` to switch between them.
+Invincible features a high-performance Bubble Tea terminal UI with dual screens: **Dashboard** (process status & details) and **Logs** (full-width streaming logs).
 
 | Key | Action |
 |---|---|
@@ -237,76 +280,47 @@ Invincible has two screens — **Dashboard** (process list + details) and **Logs
 | `S` (Shift+s) | Start all processes |
 | `X` (Shift+x) | Stop all processes |
 | `R` (Shift+r) | Restart all processes |
-| `f` | Cycle log filter (ALL → STDERR → STDOUT → INVINCIBLE) |
+| `f` | Cycle log filter (`ALL` → `STDERR` → `STDOUT` → `INVINCIBLE`) |
 | `Shift+↑` / `PgUp` | Scroll logs up |
-| `Shift+↓` / `PgDn` | Scroll logs down |
+| `Shift+↓` / `PgDown` | Scroll logs down |
 | `q` / `Ctrl+C` | Quit |
 
 ### Mouse support
+- **Scroll wheel:** Navigates processes on the Dashboard and scrolls output on the Logs screen.
+- **Copying text:** Hold **Shift** while dragging to select and copy text using native terminal selection.
 
-| Action | Area |
-|---|---|
-| Scroll wheel | Dashboard: over process list → select next/previous process |
-| Scroll wheel | Logs screen: scroll logs |
+---
 
-Invincible captures mouse clicks and drags for scrolling, which normally stops the terminal's own click-and-drag text selection. To select and copy log text anyway, hold **Shift** while clicking and dragging — most terminals (Windows Terminal, iTerm2, GNOME Terminal, Konsole, xterm, Alacritty, kitty, WezTerm) reserve Shift as an override that bypasses the app's mouse reporting for exactly this case.
+## 🔌 Agent Skill & HTTP API
 
-## CLI commands
+Invincible includes a built-in skill specification for AI assistants (Claude Code, Cursor, Copilot Workspace, custom agentic frameworks).
 
-### `invincible init`
-
-Create a starter `invincible.toml` in the current directory. Exits with an error if one already exists.
-
-### `invincible skill`
-
-Print a quick guide telling you what to paste into an AI agent session to install the Invincible skill.
-
-### `invincible skill-spec`
-
-Print the full skill description (API reference, process schema, workflows) for an agent to consume. Invoke this after the agent has been told to install the skill via `invincible skill`.
-
-## Working with agents across worktrees
-
-When you run Invincible in multiple git worktrees simultaneously, each instance needs a way to find the right API port. Invincible handles this in two ways:
-
-### `.invincible.port` file
-
-On startup, Invincible writes the bound API address (e.g. `127.0.0.1:12583`) to `.invincible.port` in the project root. The file is removed on clean shutdown. Agents can discover the correct instance by reading this file from the worktree they are operating in:
+### Agent skill setup
 
 ```sh
-cat .invincible.port
-# → 127.0.0.1:12583
+# Print instructions for installing the skill into an agent
+invincible skill
+
+# Print full skill description and OpenAPI documentation for agents
+invincible skill-spec
 ```
 
-### Path-derived port offset
+### HTTP REST API
 
-When no explicit `api_addr` is configured (flag or config file), Invincible derives a deterministic port from the project directory path by hashing the absolute path and adding the result as an offset to the base port `7777`. Each worktree gets a different preferred port, so instances rarely collide:
-
-```
-/projects/app/main      → offset 1234 → tries :9011
-/projects/app/feature-x → offset 7891 → tries :15668
-```
-
-If the preferred port happens to be taken, Invincible falls back to an OS-assigned ephemeral port — and still records the actual address in `.invincible.port`.
-
-Run `invincible skill` to see how to install the Invincible agent skill, then `invincible skill-spec` for the full API reference.
-
-## HTTP API
-
-The API binds to `127.0.0.1` and is only accessible locally.
+The HTTP API binds to `127.0.0.1` only. Discover the active address in any worktree via `cat .invincible.port`.
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/processes` | List all processes |
-| `GET` | `/processes/{name}` | Get one process |
-| `GET` | `/processes/{name}/logs` | Get recent logs (`?n=100&format=text`) |
+| `GET` | `/processes` | List all processes and statuses |
+| `GET` | `/processes/{name}` | Get single process details |
+| `GET` | `/processes/{name}/logs` | Tail recent logs (`?n=100&format=text`) |
 | `POST` | `/processes/{name}/start` | Start a process |
 | `POST` | `/processes/{name}/stop` | Stop a process |
 | `POST` | `/processes/{name}/restart` | Restart a process |
 | `POST` | `/processes/restart-all` | Restart all processes |
-| `GET` | `/openapi.json` | OpenAPI 3.0 spec |
+| `GET` | `/openapi.json` | Full OpenAPI 3.0 specification |
 
-### Process object
+### Process object schema
 
 ```json
 {
@@ -325,16 +339,19 @@ The API binds to `127.0.0.1` and is only accessible locally.
 }
 ```
 
-**States:** `stopped` · `starting` · `probing` · `running` · `building` · `crashed`
+**Process states:** `stopped` · `starting` · `probing` · `running` · `building` · `crashed`
 
-`probing` means the process has started but its port has not yet accepted a connection. Once the port is reachable the state transitions to `running`.
+- `probing`: The process is running but has not yet accepted a TCP connection on its assigned port. Transitions to `running` once reachable.
+- `building`: File change triggered a rebuild; existing process continues serving traffic until the build succeeds.
 
-### Log entry object
+### Log entries
 
 ```json
-{ "time": "2026-06-04T08:22:01Z", "line": "server started on :8080", "source": "stdout" }
+{
+  "time": "2026-06-04T08:22:01Z",
+  "line": "server started on :8080",
+  "source": "stdout"
+}
 ```
 
-Source values: `stdout`, `stderr`, or `invincible` (system events / build output).
-
-Use `?format=text` for plain newline-separated output (no metadata).
+Log sources: `stdout`, `stderr`, or `invincible` (system & build messages). Append `?format=text` for plain newline-delimited output.
