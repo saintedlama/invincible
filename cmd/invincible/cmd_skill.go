@@ -39,14 +39,25 @@ func runSkillSpec(_ *cobra.Command, _ []string) error {
 
 # Invincible — process manager skill
 
-Invincible is a local-development process manager. It keeps services alive,
-restarts them on crash, assigns free ports, and exposes an HTTP API you can
-use to inspect and control processes programmatically.
+Invincible is a local-development process manager built for humans and autonomous
+AI agents. It keeps services alive, restarts them on crash, assigns free ports,
+wires port dependencies, and exposes an HTTP API you can use to inspect and control
+processes programmatically.
+
+## Multi-Agent & Git Worktree Awareness
+
+Invincible is designed from the ground up for multi-agent parallel workflows:
+- Multiple agents running in different git worktrees will never collide.
+- Two-layer isolation automatically protects both the control plane (the Invincible
+  HTTP API) and the data plane (your application's child processes).
+- Each worktree gets a deterministic, non-colliding API port and its own .invincible.port
+  file. Child services automatically scan upward for free ports if hints are taken.
 
 ## Finding the API address
 
-Primary: Read .invincible.port in the project root. It contains the bound
-address (e.g. 127.0.0.1:7777) and is written on startup, removed on shutdown.
+Primary: Read .invincible.port in the project root of your current workspace.
+It contains the bound address (e.g. 127.0.0.1:12583) and is written on startup,
+removed on clean shutdown. Always read it from the workspace you are currently operating in.
 
 When no explicit api_addr is configured, Invincible derives a deterministic
 port from the project directory path (hash-based offset from 7777). This means
@@ -56,10 +67,7 @@ Override in config:  api_addr = ":8888"   (under [project])
 Override at runtime: invincible --api-addr :8888
 
 The API always binds 127.0.0.1. If the preferred port is taken it falls back
-to an OS-assigned ephemeral port.
-
-When multiple invincible instances run (e.g. across git worktrees), each has its
-own .invincible.port file — always read it from the project root you are working in.
+to an OS-assigned ephemeral port — and still records the final address in .invincible.port.
 
 ## Discovering managed processes
 
@@ -91,6 +99,7 @@ Plain-text response: one line per entry, no metadata (convenient for curl).
 POST /processes/{name}/start
 POST /processes/{name}/stop
 POST /processes/{name}/restart
+POST /processes/restart-all
 → { "ok": "true" } or 500 with error message
 
 ## ProcessStatus schema

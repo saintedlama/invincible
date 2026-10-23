@@ -20,6 +20,8 @@ dist/
 
 # agent stuff
 .claude/
+.agents/
+.gemini/
 tmp/
 
 # invincible runtime
