@@ -85,7 +85,7 @@ jobs:
             ./...
 
       - name: Test report
-        uses: dorny/test-reporter@v3.0.0
+        uses: dorny/test-reporter@v3.2.0
         if: success() || failure()
         with:
           name: Go tests (${{ matrix.os }})
